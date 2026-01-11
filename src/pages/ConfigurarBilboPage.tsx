@@ -6,7 +6,6 @@ import { bilboService } from '../services/bilboService';
 import { ejercicioService } from '../services/ejercicioService';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
 import type { Ejercicio, EjercicioMetodoBilbo } from '../types';
 

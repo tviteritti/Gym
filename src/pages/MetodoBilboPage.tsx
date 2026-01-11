@@ -326,9 +326,6 @@ export const MetodoBilboPage = () => {
                       const mejorReps = Math.max(...grupo.progresos.map(p => p.repeticiones));
                       const primeraFecha = grupo.progresos[grupo.progresos.length - 1].fecha;
                       const ultimaFecha = grupo.progresos[0].fecha;
-                      const mejora = grupo.progresos.length > 1 
-                        ? grupo.progresos[0].repeticiones > grupo.progresos[grupo.progresos.length - 1].repeticiones
-                        : false;
                       
                       return (
                         <div
@@ -458,15 +455,18 @@ export const MetodoBilboPage = () => {
                     const repsAnteriores = ejercicio.repsProximoPeso;
                     
                     return (
-                      <Card
+                      <div
                         key={ejercicio.id}
-                        className="hover:border-dark-accent transition-colors cursor-pointer"
                         onClick={() => handleViewHistorial(ejercicio)}
-                        style={{
-                          borderLeftColor: color !== 'transparent' ? color : undefined,
-                          borderLeftWidth: color !== 'transparent' ? '4px' : undefined,
-                        }}
+                        className="cursor-pointer"
                       >
+                        <Card
+                          className="hover:border-dark-accent transition-colors"
+                          style={{
+                            borderLeftColor: color !== 'transparent' ? color : undefined,
+                            borderLeftWidth: color !== 'transparent' ? '4px' : undefined,
+                          }}
+                        >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <h3 className="text-xl font-bold text-dark-text mb-2">
@@ -499,6 +499,7 @@ export const MetodoBilboPage = () => {
                           </Button>
                         </div>
                       </Card>
+                      </div>
                     );
                   })}
                 </div>
