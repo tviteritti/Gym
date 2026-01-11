@@ -58,8 +58,8 @@ export const Navigation = () => {
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-dark-surface border-t border-dark-border z-50">
-        <div className="flex justify-around items-center h-16">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-dark-surface border-t border-dark-border z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="flex justify-around items-center h-16 pt-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || 
                            (item.path !== '/home' && location.pathname.startsWith(item.path));
@@ -75,8 +75,8 @@ export const Navigation = () => {
                   }
                 `}
               >
-                <span className="text-2xl mb-1">{item.icon}</span>
-                <span className="text-xs font-medium">{item.label}</span>
+                <span className="text-2xl mb-0.5">{item.icon}</span>
+                <span className="text-[10px] font-medium leading-tight px-0.5 text-center">{item.label}</span>
               </Link>
             );
           })}

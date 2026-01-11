@@ -15,13 +15,14 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0a0a0a;
+  background-color: #000000;
   color: #e5e5e5;
 }
 
 #root {
   min-height: 100vh;
-  background-color: #0a0a0a;
+  min-height: -webkit-fill-available;
+  background-color: #000000;
 }
 
 /* Scrollbar personalizado */
