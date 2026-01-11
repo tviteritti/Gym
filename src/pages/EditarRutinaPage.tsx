@@ -12,7 +12,6 @@ import type {
   Ejercicio,
   DiaRutinaRequest,
   EjercicioRutinaRequest,
-  Rutina,
 } from "../types"
 
 export const EditarRutinaPage = () => {

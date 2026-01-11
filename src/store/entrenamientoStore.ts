@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { entrenamientoService } from '../services/entrenamientoService';
-import type { Entrenamiento, EjercicioEjecutado, SerieEjecutada } from '../types';
+import type { Entrenamiento, SerieEjecutada } from '../types';
 
 interface EntrenamientoState {
   entrenamiento: Entrenamiento | null;
@@ -32,14 +32,11 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
   startTrainingDay: async (usuarioId: string, fecha: string) => {
     set({ loading: true, error: null });
     try {
-      const entrenamientoId = await entrenamientoService.startTrainingDay({
+      await entrenamientoService.startTrainingDay({
         usuarioId,
         fecha,
       });
       // Limpiar entrenamientos cancelados antiguos (más de 7 días)
-      const canceledTrainings = JSON.parse(
-        localStorage.getItem('canceledTrainings') || '[]'
-      ) as string[];
       // Por ahora, simplemente limpiar todos los cancelados cuando se inicia uno nuevo
       // ya que no tenemos información de fecha de cancelación
       localStorage.removeItem('canceledTrainings');

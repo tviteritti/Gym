@@ -1,13 +1,15 @@
-// Enums
-export enum DiaSemana {
-  Monday = 1,
-  Tuesday = 2,
-  Wednesday = 3,
-  Thursday = 4,
-  Friday = 5,
-  Saturday = 6,
-  Sunday = 7
-}
+// Enums - Using const object instead of enum for erasableSyntaxOnly compatibility
+export const DiaSemana = {
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+  Sunday: 7,
+} as const;
+
+export type DiaSemanaValue = typeof DiaSemana[keyof typeof DiaSemana];
 
 // Entidades
 export interface Usuario {

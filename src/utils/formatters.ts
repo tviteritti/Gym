@@ -1,4 +1,3 @@
-import { DiaSemana } from '../types';
 
 export const formatDiaSemana = (dia: number): string => {
   const dias: Record<number, string> = {

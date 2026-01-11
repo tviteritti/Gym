@@ -14,7 +14,7 @@ import { MusculosPage } from './pages/MusculosPage';
 import './App.css';
 
 function App() {
-  const { initialize, isInitialized } = useAuthStore();
+  const { initialize } = useAuthStore();
 
   useEffect(() => {
     initialize();

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { NumberInput } from '../ui/NumberInput';
 
 interface SerieInputProps {
@@ -41,8 +41,8 @@ export const SerieInput = ({
           placeholder="Peso"
           value={peso ?? ''}
           onChange={(e) => handlePesoChange(e.target.value)}
-          step="0.5"
-          min="0"
+          step={0.5}
+          min={0}
           disabled={disabled}
           className="text-center text-sm sm:text-base max-w-full"
         />
@@ -50,8 +50,8 @@ export const SerieInput = ({
           placeholder="Reps"
           value={reps ?? ''}
           onChange={(e) => handleRepsChange(e.target.value)}
-          step="1"
-          min="0"
+          step={1}
+          min={0}
           disabled={disabled}
           className="text-center text-sm sm:text-base max-w-full"
         />
