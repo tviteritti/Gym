@@ -21,7 +21,7 @@ function App() {
   }, [initialize]);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/Gym">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
