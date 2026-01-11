@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { entrenamientoService } from '../services/entrenamientoService';
+import { bilboService } from '../services/bilboService';
 import type { Entrenamiento, SerieEjecutada } from '../types';
 
 interface EntrenamientoState {
@@ -89,7 +90,30 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
         })),
       });
 
-      // 3. Recargar el entrenamiento actual para que se vea reflejado
+      // 3. Si el ejercicio pertenece al método Bilbo, guardar el progreso
+      try {
+        const ejercicioBilbo = await bilboService.getByEjercicio(usuarioId, ejercicioId);
+        if (ejercicioBilbo) {
+          // Obtener la primera serie (serie 1)
+          const primeraSerie = series.find(s => s.numeroSerie === 1);
+          if (primeraSerie && primeraSerie.pesoReal !== undefined && primeraSerie.repeticiones !== undefined) {
+            // Guardar el progreso del método Bilbo
+            await bilboService.guardarProgreso(
+              usuarioId,
+              ejercicioId,
+              entrenamientoId,
+              primeraSerie.pesoReal,
+              primeraSerie.repeticiones,
+              fecha
+            );
+          }
+        }
+      } catch (bilboError) {
+        // Si hay un error con el método Bilbo, no fallar todo el guardado
+        console.error('Error al guardar progreso del método Bilbo:', bilboError);
+      }
+
+      // 4. Recargar el entrenamiento actual para que se vea reflejado
       await get().loadTrainingByDate(usuarioId, fecha);
       
     } catch (error) {

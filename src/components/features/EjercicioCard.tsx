@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { SerieInput } from './SerieInput';
-import type { EjercicioPlanificado, SerieEjecutada, Ejercicio } from '../../types';
+import type { EjercicioPlanificado, SerieEjecutada, Ejercicio, EjercicioMetodoBilbo, ProgresoMetodoBilbo } from '../../types';
 import { useEntrenamientoStore } from '../../store/entrenamientoStore';
+import { bilboService } from '../../services/bilboService';
 import { getMuscleColorWithDefault } from '../../constants/muscleColors';
 
 interface EjercicioCardProps {
@@ -36,7 +37,25 @@ export const EjercicioCard = ({
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<Ejercicio | undefined>(
     ejerciciosDisponibles.find(e => e.id === ejercicio.ejercicioId)
   );
+  const [ejercicioBilbo, setEjercicioBilbo] = useState<EjercicioMetodoBilbo | null>(null);
+  const [ultimoProgreso, setUltimoProgreso] = useState<ProgresoMetodoBilbo | null>(null);
   const { registerExercise, loading } = useEntrenamientoStore();
+
+  // Función para calcular el peso sugerido según el método Bilbo
+  const calcularPesoSugerido = (bilbo: EjercicioMetodoBilbo, progreso: ProgresoMetodoBilbo | null): number | null => {
+    if (!progreso) {
+      // Si no hay progreso, usar peso inicial
+      return bilbo.pesoInicial;
+    }
+    
+    if (progreso.repeticiones < 15) {
+      // Si las reps fueron < 15, resetear al peso inicial
+      return bilbo.pesoInicial;
+    } else {
+      // Si las reps fueron >= 15, incrementar peso
+      return progreso.pesoActual + bilbo.incremento;
+    }
+  };
 
   // Actualizar ejercicio seleccionado cuando cambia el ID
   useEffect(() => {
@@ -46,32 +65,103 @@ export const EjercicioCard = ({
       setHasChanges(true);
       setIsSaved(false);
     }
-  }, [ejercicioSeleccionadoId, ejerciciosDisponibles]);
+    
+    // Cargar información del método Bilbo si existe
+    const loadBilboInfo = async () => {
+      try {
+        const bilbo = await bilboService.getByEjercicio(usuarioId, ejercicioSeleccionadoId);
+        setEjercicioBilbo(bilbo);
+        
+        if (bilbo) {
+          const progreso = await bilboService.getUltimoProgreso(usuarioId, ejercicioSeleccionadoId);
+          setUltimoProgreso(progreso || null);
+          
+          // Si es del método Bilbo y no hay series guardadas, sugerir peso para la primera serie
+          if (!seriesEjecutadas || seriesEjecutadas.length === 0) {
+            const pesoSugerido = calcularPesoSugerido(bilbo, progreso);
+            if (pesoSugerido !== null) {
+              setSeries((prev) => {
+                const primeraSerie = prev.find(s => s.numeroSerie === 1);
+                if (!primeraSerie || primeraSerie.pesoReal === undefined) {
+                  const nuevasSeries = prev.filter(s => s.numeroSerie !== 1);
+                  nuevasSeries.push({ numeroSerie: 1, pesoReal: pesoSugerido, repeticiones: undefined });
+                  return nuevasSeries.sort((a, b) => a.numeroSerie - b.numeroSerie);
+                }
+                return prev;
+              });
+            }
+          }
+        } else {
+          setEjercicioBilbo(null);
+          setUltimoProgreso(null);
+        }
+      } catch {
+        // Si hay error, simplemente no mostrar info de Bilbo
+        setEjercicioBilbo(null);
+        setUltimoProgreso(null);
+      }
+    };
+    
+    loadBilboInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ejercicioSeleccionadoId, usuarioId]);
 
   // Sincronizar el estado interno cuando cambian las series ejecutadas (por ejemplo, al cambiar de día)
   useEffect(() => {
-    const nuevasSeries = seriesEjecutadas.length > 0
-      ? seriesEjecutadas
-      : ejercicio.seriesPlanificadas.map((sp) => ({
-          numeroSerie: sp.numeroSerie,
-          pesoReal: sp.pesoPlanificado,
-          repeticiones: undefined,
-        }));
-    
-    const seriesJson = JSON.stringify(series);
-    const nuevasSeriesJson = JSON.stringify(nuevasSeries);
-    
-    if (seriesJson !== nuevasSeriesJson) {
-      setSeries(nuevasSeries);
-      setIsSaved(seriesEjecutadas.length > 0);
-      setHasChanges(false);
-      // Si hay series ejecutadas, puede que el ejercicio ejecutado sea diferente al planificado
-      if (seriesEjecutadas.length > 0) {
-        // El ejercicioId ya debería estar sincronizado desde HomePage
+    if (seriesEjecutadas.length > 0) {
+      // Si hay series ejecutadas, usar esos datos (no modificar)
+      const seriesJson = JSON.stringify(series);
+      const nuevasSeriesJson = JSON.stringify(seriesEjecutadas);
+      
+      if (seriesJson !== nuevasSeriesJson) {
+        setSeries(seriesEjecutadas);
+        setIsSaved(true);
+        setHasChanges(false);
+      }
+    } else {
+      // Si no hay series ejecutadas, inicializar con las series planificadas
+      // Pero el peso para método Bilbo serie 1 se establecerá en otro useEffect
+      const nuevasSeries = ejercicio.seriesPlanificadas.map((sp) => ({
+        numeroSerie: sp.numeroSerie,
+        pesoReal: sp.pesoPlanificado,
+        repeticiones: undefined,
+      }));
+      
+      const seriesJson = JSON.stringify(series);
+      const nuevasSeriesJson = JSON.stringify(nuevasSeries);
+      
+      if (seriesJson !== nuevasSeriesJson) {
+        setSeries(nuevasSeries);
+        setIsSaved(false);
+        setHasChanges(false);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ejercicio.id, seriesEjecutadas.length, ejercicio.seriesPlanificadas.length]);
+
+  // Actualizar el peso de la serie 1 para método Bilbo cuando se carga la información o cambian las series
+  useEffect(() => {
+    if (ejercicioBilbo && seriesEjecutadas.length === 0) {
+      setSeries((prev) => {
+        const primeraSerie = prev.find(s => s.numeroSerie === 1);
+        const pesoPlanificado = ejercicio.seriesPlanificadas.find(sp => sp.numeroSerie === 1)?.pesoPlanificado;
+        // Solo actualizar si la serie 1 tiene el peso planificado (no ha sido modificada)
+        if (primeraSerie && primeraSerie.pesoReal === pesoPlanificado) {
+          const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
+          if (proximoPeso !== null && proximoPeso !== pesoPlanificado) {
+            const updated = [...prev];
+            const index = updated.findIndex(s => s.numeroSerie === 1);
+            if (index !== -1) {
+              updated[index] = { ...updated[index], pesoReal: proximoPeso };
+            }
+            return updated;
+          }
+        }
+        return prev;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ejercicioBilbo, ultimoProgreso, seriesEjecutadas.length]);
 
   const handleSerieUpdate = useCallback((numeroSerie: number, peso?: number, reps?: number) => {
     setSeries((prev) => {
@@ -123,7 +213,7 @@ export const EjercicioCard = ({
       setIsSaved(true);
       setHasChanges(false);
       onSave?.();
-    } catch (error) {
+    } catch {
       setIsSaved(false);
     }
   };
@@ -165,11 +255,16 @@ export const EjercicioCard = ({
               </option>
             ))}
           </select>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm text-dark-text-muted">Orden: {ejercicio.orden}</p>
             {esEjercicioAdicional && (
               <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded">
                 Ejercicio adicional
+              </span>
+            )}
+            {ejercicioBilbo && (
+              <span className="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">
+                Método Bilbo
               </span>
             )}
           </div>
@@ -189,19 +284,59 @@ export const EjercicioCard = ({
           const seriePlanificada = ejercicio.seriesPlanificadas.find(sp => sp.numeroSerie === numeroSerie);
           const serieEjecutada = series.find((s) => s.numeroSerie === numeroSerie);
           const esSerieAdicional = !seriePlanificada;
+          const esMetodoBilboSerie1 = ejercicioBilbo && numeroSerie === 1;
+          
+          // Calcular peso sugerido para la primera serie del método Bilbo
+          let pesoInicial: number | undefined = undefined;
+          
+          // Si es método Bilbo serie 1, priorizar el próximo peso calculado
+          if (esMetodoBilboSerie1 && ejercicioBilbo) {
+            if (serieEjecutada?.pesoReal !== undefined) {
+              // Si ya hay una serie ejecutada guardada, usar ese peso
+              pesoInicial = serieEjecutada.pesoReal;
+            } else {
+              // Si no hay serie ejecutada, usar el próximo peso calculado
+              const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
+              if (proximoPeso !== null) {
+                pesoInicial = proximoPeso;
+              } else {
+                pesoInicial = seriePlanificada?.pesoPlanificado;
+              }
+            }
+          } else {
+            // Para series normales o no método Bilbo, usar el comportamiento estándar
+            pesoInicial = serieEjecutada?.pesoReal ?? seriePlanificada?.pesoPlanificado;
+          }
           
           return (
             <div key={numeroSerie} className="flex items-center gap-2">
               <div className="flex-1">
                 <SerieInput
                   numeroSerie={numeroSerie}
-                  pesoInicial={serieEjecutada?.pesoReal ?? seriePlanificada?.pesoPlanificado}
+                  pesoInicial={pesoInicial}
                   repsInicial={serieEjecutada?.repeticiones}
                   onUpdate={(peso, reps) =>
                     handleSerieUpdate(numeroSerie, peso, reps)
                   }
                   disabled={loading || (isSaved && !hasChanges)}
                 />
+                {esMetodoBilboSerie1 && ejercicioBilbo && (() => {
+                  const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
+                  return proximoPeso !== null ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-xs text-purple-400">
+                        ⚡ Primera serie al fallo (Método Bilbo)
+                      </span>
+                      <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded font-semibold">
+                        Próximo: {proximoPeso} kg
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-purple-400 mt-1">
+                      ⚡ Primera serie al fallo (Método Bilbo)
+                    </p>
+                  );
+                })()}
               </div>
               {esSerieAdicional && (
                 <Button

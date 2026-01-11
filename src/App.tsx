@@ -11,6 +11,8 @@ import { EditarRutinaPage } from './pages/EditarRutinaPage';
 import { EjerciciosPage } from './pages/EjerciciosPage';
 import { CrearEjercicioPage } from './pages/CrearEjercicioPage';
 import { MusculosPage } from './pages/MusculosPage';
+import { MetodoBilboPage } from './pages/MetodoBilboPage';
+import { ConfigurarBilboPage } from './pages/ConfigurarBilboPage';
 import './App.css';
 
 function App() {
@@ -78,6 +80,22 @@ function App() {
           element={
             <ProtectedRoute>
               <MusculosPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bilbo"
+          element={
+            <ProtectedRoute>
+              <MetodoBilboPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bilbo/configurar"
+          element={
+            <ProtectedRoute>
+              <ConfigurarBilboPage />
             </ProtectedRoute>
           }
         />

@@ -5,6 +5,7 @@ const navItems = [
   { path: '/home', label: 'Entrenamiento', icon: '🏋️' },
   { path: '/rutinas', label: 'Rutinas', icon: '📋' },
   { path: '/ejercicios', label: 'Ejercicios', icon: '💪' },
+  { path: '/bilbo', label: 'Método Bilbo', icon: '⚡' },
   { path: '/musculos', label: 'Músculos', icon: '🔬' },
 ];
 

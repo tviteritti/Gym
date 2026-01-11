@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NumberInput } from '../ui/NumberInput';
 
 interface SerieInputProps {
@@ -18,6 +18,22 @@ export const SerieInput = ({
 }: SerieInputProps) => {
   const [peso, setPeso] = useState<number | undefined>(pesoInicial);
   const [reps, setReps] = useState<number | undefined>(repsInicial);
+  
+  // Solo actualizar cuando pesoInicial cambia y el peso actual es undefined o diferente
+  // Pero NO actualizar si el peso ya está establecido (para evitar sobrescribir datos guardados)
+  useEffect(() => {
+    // Solo actualizar si pesoInicial tiene un valor y el peso actual está vacío
+    if (pesoInicial !== undefined && peso === undefined) {
+      setPeso(pesoInicial);
+    }
+  }, [pesoInicial]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Solo actualizar cuando repsInicial cambia y las reps actuales son undefined
+  useEffect(() => {
+    if (repsInicial !== undefined && reps === undefined) {
+      setReps(repsInicial);
+    }
+  }, [repsInicial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePesoChange = (val: string) => {
     const nuevoPeso = val ? parseFloat(val) : undefined;

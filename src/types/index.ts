@@ -167,6 +167,40 @@ export interface SerieEjecucionRequest {
   repeticiones?: number;
 }
 
+// Método Bilbo
+export interface EjercicioMetodoBilbo {
+  id: string;
+  ejercicioId: string;
+  ejercicioNombre?: string;
+  usuarioId: string;
+  pesoInicial: number;
+  incremento: number;
+  fechaCreacion: string;
+}
+
+export interface ProgresoMetodoBilbo {
+  id: string;
+  ejercicioId: string;
+  ejercicioNombre?: string;
+  usuarioId: string;
+  entrenamientoId: string;
+  pesoActual: number;
+  repeticiones: number;
+  fecha: string;
+  fechaCreacion: string;
+}
+
+export interface CreateEjercicioMetodoBilboRequest {
+  ejercicioId: string;
+  pesoInicial: number;
+  incremento: number; // 2.5 o 5 kg
+}
+
+export interface UpdateEjercicioMetodoBilboRequest {
+  pesoInicial?: number;
+  incremento?: number;
+}
+
 // Responses
 export interface AuthResponse {
   token: string;
