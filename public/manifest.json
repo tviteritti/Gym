@@ -3,8 +3,10 @@
   "short_name": "GymTracker",
   "description": "Aplicación para seguimiento de entrenamientos de gimnasio",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "orientation": "portrait",
+  "background_color": "#1a1a1a",
   "theme_color": "#2563eb",
   "icons": [
     {
