@@ -201,26 +201,19 @@ export const entrenamientoService = {
   },
 
   async getRecordPersonal(usuarioId: string, ejercicioId: string): Promise<{peso: number, reps: number} | null> {
-    // Primero obtener los IDs de ejercicios ejecutados para este ejercicio
-    const { data: ejerciciosEjecutados, error: ejError } = await supabase
-      .from('ejercicios_ejecutados')
-      .select('id')
-      .eq('ejercicio_id', ejercicioId);
-
-    if (ejError) {
-      throw new Error(`Error al obtener ejercicios ejecutados: ${ejError.message}`);
-    }
-
-    if (!ejerciciosEjecutados || ejerciciosEjecutados.length === 0) {
-      return null;
-    }
-
-    const ejerciciosIds = ejerciciosEjecutados.map(ej => ej.id);
-
+    // Usar JOIN para obtener las series del usuario y ejercicio específico
     const { data, error } = await supabase
       .from('series_ejecutadas')
-      .select('peso_real, repeticiones')
-      .in('ejercicio_ejecutado_id', ejerciciosIds)
+      .select(`
+        peso_real, 
+        repeticiones,
+        ejercicio_ejecutado!inner(
+          usuario_id,
+          ejercicio_id
+        )
+      `)
+      .eq('ejercicio_ejecutado.usuario_id', usuarioId)
+      .eq('ejercicio_ejecutado.ejercicio_id', ejercicioId)
       .not('peso_real', 'is', null)
       .not('repeticiones', 'is', null)
       .order('peso_real', { ascending: false })
@@ -242,30 +235,23 @@ export const entrenamientoService = {
   },
 
   async getMaxRepsEnPesoCercano(usuarioId: string, ejercicioId: string, pesoObjetivo: number): Promise<{peso: number, reps: number} | null> {
-    // Primero obtener los IDs de ejercicios ejecutados para este ejercicio
-    const { data: ejerciciosEjecutados, error: ejError } = await supabase
-      .from('ejercicios_ejecutados')
-      .select('id')
-      .eq('ejercicio_id', ejercicioId);
-
-    if (ejError) {
-      throw new Error(`Error al obtener ejercicios ejecutados: ${ejError.message}`);
-    }
-
-    if (!ejerciciosEjecutados || ejerciciosEjecutados.length === 0) {
-      return null;
-    }
-
-    const ejerciciosIds = ejerciciosEjecutados.map(ej => ej.id);
-    
     // Buscar la serie con más repeticiones en un peso cercano (±2.5kg)
     const pesoMin = pesoObjetivo - 2.5;
     const pesoMax = pesoObjetivo + 2.5;
 
+    // Usar JOIN para obtener las series del usuario y ejercicio específico
     const { data, error } = await supabase
       .from('series_ejecutadas')
-      .select('peso_real, repeticiones')
-      .in('ejercicio_ejecutado_id', ejerciciosIds)
+      .select(`
+        peso_real, 
+        repeticiones,
+        ejercicio_ejecutado!inner(
+          usuario_id,
+          ejercicio_id
+        )
+      `)
+      .eq('ejercicio_ejecutado.usuario_id', usuarioId)
+      .eq('ejercicio_ejecutado.ejercicio_id', ejercicioId)
       .gte('peso_real', pesoMin)
       .lte('peso_real', pesoMax)
       .not('repeticiones', 'is', null)
@@ -287,27 +273,19 @@ export const entrenamientoService = {
   },
 
   async getMaxRepsEnPesoExacto(usuarioId: string, ejercicioId: string, pesoObjetivo: number): Promise<{peso: number, reps: number} | null> {
-    // Primero obtener los IDs de ejercicios ejecutados para este ejercicio
-    const { data: ejerciciosEjecutados, error: ejError } = await supabase
-      .from('ejercicios_ejecutados')
-      .select('id')
-      .eq('ejercicio_id', ejercicioId);
-
-    if (ejError) {
-      throw new Error(`Error al obtener ejercicios ejecutados: ${ejError.message}`);
-    }
-
-    if (!ejerciciosEjecutados || ejerciciosEjecutados.length === 0) {
-      return null;
-    }
-
-    const ejerciciosIds = ejerciciosEjecutados.map(ej => ej.id);
-
-    // Buscar el máximo de repeticiones exactamente en el peso objetivo
+    // Usar JOIN para obtener las series del usuario y ejercicio específico
     const { data, error } = await supabase
       .from('series_ejecutadas')
-      .select('peso_real, repeticiones')
-      .in('ejercicio_ejecutado_id', ejerciciosIds)
+      .select(`
+        peso_real, 
+        repeticiones,
+        ejercicio_ejecutado!inner(
+          usuario_id,
+          ejercicio_id
+        )
+      `)
+      .eq('ejercicio_ejecutado.usuario_id', usuarioId)
+      .eq('ejercicio_ejecutado.ejercicio_id', ejercicioId)
       .eq('peso_real', pesoObjetivo)
       .not('repeticiones', 'is', null)
       .order('repeticiones', { ascending: false })
