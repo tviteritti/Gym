@@ -163,7 +163,12 @@ export const HomePage = () => {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center">
-          <p className="text-dark-text-muted">Cargando...</p>
+          <div className="text-center">
+            <div className="animate-bounce-soft mb-4">
+              <div className="w-16 h-16 mx-auto bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse-glow"></div>
+            </div>
+            <p className="text-dark-text-muted animate-fade-in">Cargando...</p>
+          </div>
         </div>
       </Layout>
     );
@@ -173,12 +178,19 @@ export const HomePage = () => {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center px-4">
-          <Card className="w-full max-w-md text-center">
-            <h2 className="text-2xl font-bold mb-4 text-dark-text">No hay rutina activa</h2>
-            <p className="text-dark-text-muted mb-6">
-              Crea una rutina y actívala para comenzar a entrenar
-            </p>
-            <Button onClick={() => navigate('/rutinas')} fullWidth>
+          <Card className="w-full max-w-md text-center animate-slide-in-up">
+            <div className="mb-6">
+              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-r from-gray-600 to-gray-700 rounded-full flex items-center justify-center animate-float">
+                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <h2 className="text-3xl font-bold gradient-text mb-4">No hay rutina activa</h2>
+              <p className="text-dark-text-muted text-lg">
+                Crea una rutina y actívala para comenzar a entrenar
+              </p>
+            </div>
+            <Button onClick={() => navigate('/rutinas')} variant="gradient" fullWidth>
               Ir a Rutinas
             </Button>
           </Card>
@@ -189,14 +201,18 @@ export const HomePage = () => {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-dark-bg p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-6 flex justify-between items-end">
+      <div className="min-h-screen p-4 md:p-8">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-8 flex justify-between items-end animate-slide-in-up">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-2">
+              <h1 className="text-4xl font-bold gradient-text mb-3 animate-float">
                 Entrenamiento
               </h1>
-              <p className="text-dark-text-muted">{formatDiaSemana(selectedDay)} ({fechaSeleccionada})</p>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full animate-pulse-glow"></div>
+                <p className="text-dark-text-muted text-lg">{formatDiaSemana(selectedDay)}</p>
+                <span className="text-dark-text-muted/50">({fechaSeleccionada})</span>
+              </div>
             </div>
             {tieneDatos && (
               <Button
@@ -207,6 +223,7 @@ export const HomePage = () => {
                     clearEntrenamiento();
                   }
                 }}
+                className="animate-fade-in"
               >
                 Limpiar Día
               </Button>
@@ -214,32 +231,35 @@ export const HomePage = () => {
           </div>
 
           {/* Selector de semana y día */}
-          <Card className="mb-6">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
+          <Card className="mb-8 glow animate-slide-in-up" style={{ animationDelay: '100ms' }}>
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={() => setWeekOffset(0)}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                  className={`px-4 py-2 rounded-xl font-medium transition-all duration-400 ease-smooth hover:scale-[1.02] ${
                     weekOffset === 0
-                      ? 'bg-dark-accent text-white'
-                      : 'bg-dark-surface text-dark-text border border-dark-border hover:bg-dark-hover'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-glow'
+                      : 'glass-morphism text-dark-text border border-dark-border/50 hover:bg-dark-hover'
                   }`}
                 >
                   Esta Semana
                 </button>
                 <button
                   onClick={() => setWeekOffset(1)}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                  className={`px-4 py-2 rounded-xl font-medium transition-all duration-400 ease-smooth hover:scale-[1.02] ${
                     weekOffset === 1
-                      ? 'bg-dark-accent text-white'
-                      : 'bg-dark-surface text-dark-text border border-dark-border hover:bg-dark-hover'
+                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-glow'
+                      : 'glass-morphism text-dark-text border border-dark-border/50 hover:bg-dark-hover'
                   }`}
                 >
                   Semana Siguiente
                 </button>
               </div>
               {weekOffset === 1 && (
-                <span className="text-sm text-dark-text-muted italic">
+                <span className="text-sm text-dark-text-muted italic animate-fade-in flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
                   Vista previa - sin datos guardados
                 </span>
               )}
@@ -251,14 +271,22 @@ export const HomePage = () => {
           </Card>
 
           {/* Ejercicios - Mostrar siempre con campos de entrada */}
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-dark-text">Ejercicios del Día</h2>
+          <div className="animate-slide-in-up" style={{ animationDelay: '200ms' }}>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-dark-text flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                Ejercicios del Día
+              </h2>
               <Button
-                variant="outline"
+                variant="gradient"
                 size="sm"
                 onClick={handleAgregarEjercicio}
                 disabled={ejercicios.length === 0}
+                className="hover:scale-[1.05]"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -266,9 +294,9 @@ export const HomePage = () => {
                 Agregar Ejercicio
               </Button>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-6">
               {todosLosEjercicios.length > 0 ? (
-                todosLosEjercicios.map((ejercicio) => {
+                todosLosEjercicios.map((ejercicio, index) => {
                   const ejercicioEjecutado = entrenamiento?.ejerciciosEjecutados.find(
                     (ee) => ee.ejercicioId === ejercicio.ejercicioId
                   );
@@ -277,33 +305,43 @@ export const HomePage = () => {
                   const esNuevo = ejerciciosNuevos.some(en => en.id === ejercicio.id);
                   
                   return (
-                    <EjercicioCard
+                    <div 
                       key={`${selectedDay}-${ejercicio.id}`}
-                      ejercicio={ejercicio}
-                      seriesEjecutadas={ejercicioEjecutado?.seriesEjecutadas}
-                      usuarioId={usuario!.id}
-                      fecha={fechaSeleccionada}
-                      onSave={recargarEntrenamiento}
-                      musculoPrincipal={ejercicioInfo?.musculoPrincipal}
-                      ejerciciosDisponibles={ejercicios}
-                      esEjercicioAdicional={esAdicional || esNuevo}
-                      onDelete={
-                        esNuevo
-                          ? () => handleEliminarEjercicioNuevo(ejercicio.id)
-                          : esAdicional && ejercicioEjecutado
-                          ? () => handleEliminarEjercicioAdicional(ejercicioEjecutado)
-                          : undefined
-                      }
-                    />
+                      className="animate-fade-in"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <EjercicioCard
+                        ejercicio={ejercicio}
+                        seriesEjecutadas={ejercicioEjecutado?.seriesEjecutadas}
+                        usuarioId={usuario!.id}
+                        fecha={fechaSeleccionada}
+                        onSave={recargarEntrenamiento}
+                        musculoPrincipal={ejercicioInfo?.musculoPrincipal}
+                        ejerciciosDisponibles={ejercicios}
+                        esEjercicioAdicional={esAdicional || esNuevo}
+                        onDelete={
+                          esNuevo
+                            ? () => handleEliminarEjercicioNuevo(ejercicio.id)
+                            : esAdicional && ejercicioEjecutado
+                            ? () => handleEliminarEjercicioAdicional(ejercicioEjecutado)
+                            : undefined
+                        }
+                      />
+                    </div>
                   );
                 })
               ) : (
-                <Card>
-                  <div className="py-12 text-center">
-                    <p className="text-dark-text-muted mb-4">
-                      No hay ejercicios planificados para {formatDiaSemana(selectedDay)}
+                <Card glow className="animate-fade-in">
+                  <div className="py-16 text-center">
+                    <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-r from-gray-600 to-gray-700 rounded-full flex items-center justify-center animate-float">
+                      <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </div>
+                    <p className="text-dark-text-muted text-lg mb-6">
+                      No hay ejercicios planificados para <span className="font-semibold">{formatDiaSemana(selectedDay)}</span>
                     </p>
-                    <Button variant="outline" onClick={() => navigate('/rutinas')}>
+                    <Button variant="gradient" onClick={() => navigate('/rutinas')} className="hover:scale-[1.05]">
                       Gestionar Rutinas
                     </Button>
                   </div>

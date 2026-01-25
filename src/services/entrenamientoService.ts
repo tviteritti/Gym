@@ -199,5 +199,132 @@ export const entrenamientoService = {
       throw new Error(`Error al eliminar ejercicio ejecutado: ${ejercicioError.message}`);
     }
   },
+
+  async getRecordPersonal(usuarioId: string, ejercicioId: string): Promise<{peso: number, reps: number} | null> {
+    // Primero obtener los IDs de ejercicios ejecutados para este ejercicio
+    const { data: ejerciciosEjecutados, error: ejError } = await supabase
+      .from('ejercicios_ejecutados')
+      .select('id')
+      .eq('ejercicio_id', ejercicioId);
+
+    if (ejError) {
+      throw new Error(`Error al obtener ejercicios ejecutados: ${ejError.message}`);
+    }
+
+    if (!ejerciciosEjecutados || ejerciciosEjecutados.length === 0) {
+      return null;
+    }
+
+    const ejerciciosIds = ejerciciosEjecutados.map(ej => ej.id);
+
+    const { data, error } = await supabase
+      .from('series_ejecutadas')
+      .select('peso_real, repeticiones')
+      .in('ejercicio_ejecutado_id', ejerciciosIds)
+      .not('peso_real', 'is', null)
+      .not('repeticiones', 'is', null)
+      .order('peso_real', { ascending: false })
+      .order('repeticiones', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      throw new Error(`Error al obtener record personal: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    return {
+      peso: parseFloat(data[0].peso_real.toString()),
+      reps: data[0].repeticiones
+    };
+  },
+
+  async getMaxRepsEnPesoCercano(usuarioId: string, ejercicioId: string, pesoObjetivo: number): Promise<{peso: number, reps: number} | null> {
+    // Primero obtener los IDs de ejercicios ejecutados para este ejercicio
+    const { data: ejerciciosEjecutados, error: ejError } = await supabase
+      .from('ejercicios_ejecutados')
+      .select('id')
+      .eq('ejercicio_id', ejercicioId);
+
+    if (ejError) {
+      throw new Error(`Error al obtener ejercicios ejecutados: ${ejError.message}`);
+    }
+
+    if (!ejerciciosEjecutados || ejerciciosEjecutados.length === 0) {
+      return null;
+    }
+
+    const ejerciciosIds = ejerciciosEjecutados.map(ej => ej.id);
+    
+    // Buscar la serie con más repeticiones en un peso cercano (±2.5kg)
+    const pesoMin = pesoObjetivo - 2.5;
+    const pesoMax = pesoObjetivo + 2.5;
+
+    const { data, error } = await supabase
+      .from('series_ejecutadas')
+      .select('peso_real, repeticiones')
+      .in('ejercicio_ejecutado_id', ejerciciosIds)
+      .gte('peso_real', pesoMin)
+      .lte('peso_real', pesoMax)
+      .not('repeticiones', 'is', null)
+      .order('repeticiones', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      throw new Error(`Error al obtener max reps peso cercano: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    return {
+      peso: parseFloat(data[0].peso_real.toString()),
+      reps: data[0].repeticiones
+    };
+  },
+
+  async getMaxRepsEnPesoExacto(usuarioId: string, ejercicioId: string, pesoObjetivo: number): Promise<{peso: number, reps: number} | null> {
+    // Primero obtener los IDs de ejercicios ejecutados para este ejercicio
+    const { data: ejerciciosEjecutados, error: ejError } = await supabase
+      .from('ejercicios_ejecutados')
+      .select('id')
+      .eq('ejercicio_id', ejercicioId);
+
+    if (ejError) {
+      throw new Error(`Error al obtener ejercicios ejecutados: ${ejError.message}`);
+    }
+
+    if (!ejerciciosEjecutados || ejerciciosEjecutados.length === 0) {
+      return null;
+    }
+
+    const ejerciciosIds = ejerciciosEjecutados.map(ej => ej.id);
+
+    // Buscar el máximo de repeticiones exactamente en el peso objetivo
+    const { data, error } = await supabase
+      .from('series_ejecutadas')
+      .select('peso_real, repeticiones')
+      .in('ejercicio_ejecutado_id', ejerciciosIds)
+      .eq('peso_real', pesoObjetivo)
+      .not('repeticiones', 'is', null)
+      .order('repeticiones', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      throw new Error(`Error al obtener max reps peso exacto: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    return {
+      peso: parseFloat(data[0].peso_real.toString()),
+      reps: data[0].repeticiones
+    };
+  },
 };
 

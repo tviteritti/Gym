@@ -5,6 +5,7 @@ import { SerieInput } from './SerieInput';
 import type { EjercicioPlanificado, SerieEjecutada, Ejercicio, EjercicioMetodoBilbo, ProgresoMetodoBilbo } from '../../types';
 import { useEntrenamientoStore } from '../../store/entrenamientoStore';
 import { bilboService } from '../../services/bilboService';
+import { entrenamientoService } from '../../services/entrenamientoService';
 import { getMuscleColorWithDefault } from '../../constants/muscleColors';
 
 interface EjercicioCardProps {
@@ -33,12 +34,17 @@ export const EjercicioCard = ({
   const [series, setSeries] = useState<SerieEjecutada[]>([]);
   const [isSaved, setIsSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [userInteracted, setUserInteracted] = useState(false);
   const [ejercicioSeleccionadoId, setEjercicioSeleccionadoId] = useState<string>(ejercicio.ejercicioId);
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<Ejercicio | undefined>(
     ejerciciosDisponibles.find(e => e.id === ejercicio.ejercicioId)
   );
   const [ejercicioBilbo, setEjercicioBilbo] = useState<EjercicioMetodoBilbo | null>(null);
   const [ultimoProgreso, setUltimoProgreso] = useState<ProgresoMetodoBilbo | null>(null);
+  const [recordPersonal, setRecordPersonal] = useState<{peso: number, reps: number} | null>(null);
+  const [maxRepsPesoCercano, setMaxRepsPesoCercano] = useState<{peso: number, reps: number} | null>(null);
+  const [maxRepsPesoExacto, setMaxRepsPesoExacto] = useState<{peso: number, reps: number} | null>(null);
   const { registerExercise, loading } = useEntrenamientoStore();
 
   // Función para calcular el peso sugerido según el método Bilbo
@@ -55,6 +61,58 @@ export const EjercicioCard = ({
       // Si las reps fueron >= 15, incrementar peso
       return progreso.pesoActual + bilbo.incremento;
     }
+  };
+
+  // Cargar record personal del ejercicio
+  const cargarRecordPersonal = useCallback(async (ejercicioId: string) => {
+    try {
+      const record = await entrenamientoService.getRecordPersonal(usuarioId, ejercicioId);
+      setRecordPersonal(record);
+    } catch (error) {
+      console.error('Error al cargar record personal:', error);
+      setRecordPersonal(null);
+    }
+  }, [usuarioId]);
+
+  // Cargar máximo de reps en peso cercano para método Bilbo
+  const cargarMaxRepsPesoCercano = useCallback(async (ejercicioId: string, pesoObjetivo: number) => {
+    try {
+      const maxReps = await entrenamientoService.getMaxRepsEnPesoCercano(usuarioId, ejercicioId, pesoObjetivo);
+      setMaxRepsPesoCercano(maxReps);
+    } catch (error) {
+      console.error('Error al cargar max reps peso cercano:', error);
+      setMaxRepsPesoCercano(null);
+    }
+  }, [usuarioId]);
+
+  // Cargar máximo de reps en peso exacto para método Bilbo
+  const cargarMaxRepsPesoExacto = useCallback(async (ejercicioId: string, pesoObjetivo: number) => {
+    try {
+      const maxReps = await entrenamientoService.getMaxRepsEnPesoExacto(usuarioId, ejercicioId, pesoObjetivo);
+      setMaxRepsPesoExacto(maxReps);
+    } catch (error) {
+      console.error('Error al cargar max reps peso exacto:', error);
+      setMaxRepsPesoExacto(null);
+    }
+  }, [usuarioId]);
+
+  // Función para habilitar modo edición
+  const habilitarEdicion = () => {
+    setIsEditMode(true);
+    setUserInteracted(true);
+  };
+
+  // Función para cancelar edición
+  const cancelarEdicion = () => {
+    setIsEditMode(false);
+    setUserInteracted(false);
+    // Restaurar valores originales
+    setSeries(seriesEjecutadas.length > 0 ? seriesEjecutadas : ejercicio.seriesPlanificadas.map((sp) => ({
+      numeroSerie: sp.numeroSerie,
+      pesoReal: sp.pesoPlanificado,
+      repeticiones: undefined,
+    })));
+    setHasChanges(false);
   };
 
   // Actualizar ejercicio seleccionado cuando cambia el ID
@@ -163,7 +221,30 @@ export const EjercicioCard = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ejercicioBilbo, ultimoProgreso, seriesEjecutadas.length]);
 
+  // Cargar records personales cuando cambia el ejercicio seleccionado
+  useEffect(() => {
+    if (ejercicioSeleccionadoId) {
+      cargarRecordPersonal(ejercicioSeleccionadoId);
+    }
+  }, [ejercicioSeleccionadoId, cargarRecordPersonal]);
+
+  // Cargar max reps para método Bilbo cuando cambia el peso sugerido
+  useEffect(() => {
+    if (ejercicioBilbo && ejercicioSeleccionadoId) {
+      const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
+      if (proximoPeso !== null) {
+        cargarMaxRepsPesoCercano(ejercicioSeleccionadoId, proximoPeso);
+        cargarMaxRepsPesoExacto(ejercicioSeleccionadoId, proximoPeso);
+      }
+    }
+  }, [ejercicioBilbo, ultimoProgreso, ejercicioSeleccionadoId, cargarMaxRepsPesoCercano]);
+
   const handleSerieUpdate = useCallback((numeroSerie: number, peso?: number, reps?: number) => {
+    if (!userInteracted && !isEditMode && (isSaved || seriesEjecutadas.length > 0)) {
+      // No permitir cambios si está guardado y no estamos en modo edición
+      return;
+    }
+    
     setSeries((prev) => {
       const updated = [...prev];
       const index = updated.findIndex(s => s.numeroSerie === numeroSerie);
@@ -179,7 +260,7 @@ export const EjercicioCard = ({
       setIsSaved(false);
       return sorted;
     });
-  }, []);
+  }, [userInteracted, isEditMode, isSaved, seriesEjecutadas]);
 
   const handleAddSerie = () => {
     const siguienteNumero = series.length > 0 
@@ -247,7 +328,7 @@ export const EjercicioCard = ({
             value={ejercicioSeleccionadoId}
             onChange={(e) => setEjercicioSeleccionadoId(e.target.value)}
             className="w-full mb-2 px-3 py-2 bg-dark-surface border border-dark-border rounded-lg text-dark-text focus:outline-none focus:ring-2 focus:ring-dark-accent"
-            disabled={loading || (isSaved && !hasChanges)}
+          disabled={loading || (isSaved && !hasChanges && !isEditMode)}
           >
             {ejerciciosDisponibles.map((ej) => (
               <option key={ej.id} value={ej.id}>
@@ -268,15 +349,59 @@ export const EjercicioCard = ({
               </span>
             )}
           </div>
+          
+          {/* Records personales */}
+          {recordPersonal && (
+            <div className="mt-2 p-2 glass-morphism rounded-lg border border-dark-border/50">
+              <div className="flex items-center gap-2 text-xs text-yellow-400">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <span className="font-semibold">Récord Personal:</span>
+                <span>{recordPersonal.peso} kg × {recordPersonal.reps} reps</span>
+              </div>
+            </div>
+          )}
         </div>
-        {isSaved && !hasChanges && (
-          <div className="flex items-center gap-2 text-green-400 ml-4">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span className="text-sm font-medium">Guardado</span>
-          </div>
-        )}
+        
+        <div className="flex items-center gap-2 ml-4">
+          {isSaved && !hasChanges && (
+            <div className="flex items-center gap-2 text-green-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-sm font-medium">Guardado</span>
+            </div>
+          )}
+          
+          {isSaved && !hasChanges && !isEditMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={habilitarEdicion}
+              className="ml-2"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Editar
+            </Button>
+          )}
+          
+          {isEditMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cancelarEdicion}
+              className="ml-2"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Cancelar
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-3 mb-4">
@@ -318,32 +443,55 @@ export const EjercicioCard = ({
                   onUpdate={(peso, reps) =>
                     handleSerieUpdate(numeroSerie, peso, reps)
                   }
-                  disabled={loading || (isSaved && !hasChanges)}
+                  disabled={loading || (isSaved && !hasChanges && !isEditMode)}
+                  hasUserInteracted={userInteracted || isEditMode}
                 />
-                {esMetodoBilboSerie1 && ejercicioBilbo && (() => {
-                  const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
-                  return proximoPeso !== null ? (
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-xs text-purple-400">
-                        ⚡ Primera serie al fallo (Método Bilbo)
-                      </span>
-                      <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded font-semibold">
-                        Próximo: {proximoPeso} kg
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-purple-400 mt-1">
-                      ⚡ Primera serie al fallo (Método Bilbo)
-                    </p>
-                  );
-                })()}
+                 {esMetodoBilboSerie1 && ejercicioBilbo && (() => {
+                   const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
+                   return proximoPeso !== null ? (
+                     <div className="mt-2 space-y-1">
+                       <div className="flex items-center gap-2">
+                         <span className="text-xs text-purple-400">
+                           ⚡ Primera serie al fallo (Método Bilbo)
+                         </span>
+                         <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded font-semibold">
+                           Próximo: {proximoPeso} kg
+                         </span>
+                       </div>
+                       {maxRepsPesoExacto && (
+                         <div className="flex items-center gap-2">
+                           <span className="text-xs text-orange-400">
+                             🎯 Max reps en {maxRepsPesoExacto.peso} kg:
+                           </span>
+                           <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded font-semibold">
+                             {maxRepsPesoExacto.reps} reps
+                           </span>
+                         </div>
+                       )}
+                       {maxRepsPesoCercano && (
+                         <div className="flex items-center gap-2">
+                           <span className="text-xs text-green-400">
+                             🏆 Máx reps en pesos cercanos:
+                           </span>
+                           <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded font-semibold">
+                             {maxRepsPesoCercano.reps} reps ({maxRepsPesoCercano.peso} kg)
+                           </span>
+                         </div>
+                       )}
+                     </div>
+                   ) : (
+                     <p className="text-xs text-purple-400 mt-2">
+                       ⚡ Primera serie al fallo (Método Bilbo)
+                     </p>
+                   );
+                 })()}
               </div>
               {esSerieAdicional && (
                 <Button
                   variant="danger"
                   size="sm"
                   onClick={() => handleRemoveSerie(numeroSerie)}
-                  disabled={loading || (isSaved && !hasChanges)}
+                  disabled={loading || (isSaved && !hasChanges && !isEditMode)}
                   className="flex-shrink-0"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -385,7 +533,7 @@ export const EjercicioCard = ({
         )}
         <Button
           onClick={handleSave}
-          disabled={loading || (isSaved && !hasChanges) || !ejercicioSeleccionadoId}
+          disabled={loading || (isSaved && !hasChanges && !isEditMode) || !ejercicioSeleccionadoId}
           fullWidth
           size="lg"
           variant={isSaved && !hasChanges ? "outline" : "primary"}
