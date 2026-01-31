@@ -11,6 +11,8 @@ const mapRutinaFromDB = (rutinaData: any): Rutina => {
         id: serie.id,
         numeroSerie: serie.numero_serie,
         pesoPlanificado: serie.peso_planificado ? parseFloat(serie.peso_planificado.toString()) : undefined,
+        rangoRepeticionesMin: serie.rango_repeticiones_min ? parseInt(serie.rango_repeticiones_min.toString()) : undefined,
+        rangoRepeticionesMax: serie.rango_repeticiones_max ? parseInt(serie.rango_repeticiones_max.toString()) : undefined,
       }));
 
       return {
@@ -18,6 +20,7 @@ const mapRutinaFromDB = (rutinaData: any): Rutina => {
         ejercicioId: ejPlan.ejercicio_id,
         ejercicioNombre: (ejPlan.ejercicios as any)?.nombre || '',
         orden: ejPlan.orden,
+        esBilbo: ejPlan.es_bilbo || false,
         seriesPlanificadas,
       };
     });
@@ -26,6 +29,7 @@ const mapRutinaFromDB = (rutinaData: any): Rutina => {
       id: dia.id,
       diaSemana: dia.dia_semana,
       diaSemanaNombre: nombresDias[dia.dia_semana] || '',
+      ejercicioBilboId: dia.ejercicio_bilbo_id || undefined,
       ejerciciosPlanificados,
     };
   });
@@ -64,13 +68,14 @@ export const rutinaService = {
       throw new Error(`Error al crear rutina: ${rutinaError.message}`);
     }
 
-    // Crear días de rutina y sus ejercicios
+      // Crear días de rutina y sus ejercicios
     for (const dia of data.dias) {
       const { data: diaRutina, error: diaError } = await supabase
         .from('dias_de_rutina')
         .insert({
           rutina_id: rutina.id,
           dia_semana: dia.diaSemana,
+          ejercicio_bilbo_id: dia.ejercicioBilboId || null,
         })
         .select('id')
         .single();
@@ -79,7 +84,7 @@ export const rutinaService = {
         throw new Error(`Error al crear día de rutina: ${diaError.message}`);
       }
 
-      // Crear ejercicios planificados para este día
+        // Crear ejercicios planificados para este día
       for (const ejercicio of dia.ejercicios) {
         const { data: ejPlan, error: ejPlanError } = await supabase
           .from('ejercicios_planificados')
@@ -87,6 +92,9 @@ export const rutinaService = {
             dia_de_rutina_id: diaRutina.id,
             ejercicio_id: ejercicio.ejercicioId,
             orden: ejercicio.orden,
+            es_bilbo: ejercicio.esBilbo || false,
+            rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
+            rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
           })
           .select('id')
           .single();
@@ -101,6 +109,8 @@ export const rutinaService = {
             ejercicio_planificado_id: ejPlan.id,
             numero_serie: serie.numeroSerie,
             peso_planificado: serie.pesoPlanificado || null,
+            rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
+            rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
           }));
 
           const { error: seriesError } = await supabase
@@ -228,6 +238,33 @@ export const rutinaService = {
     return (rutinasData || []).map(rutina => mapRutinaFromDB(rutina));
   },
 
+  async delete(rutinaId: string, usuarioId: string): Promise<boolean> {
+    // Verificar que la rutina no esté activa
+    const { data: rutina } = await supabase
+      .from('rutinas')
+      .select('activa')
+      .eq('id', rutinaId)
+      .eq('usuario_id', usuarioId)
+      .single();
+
+    if (rutina?.activa) {
+      throw new Error('No se puede eliminar una rutina activa. Primero desactívala.');
+    }
+
+    // Eliminar la rutina (se eliminarán en cascada los días, ejercicios y series)
+    const { error } = await supabase
+      .from('rutinas')
+      .delete()
+      .eq('id', rutinaId)
+      .eq('usuario_id', usuarioId);
+
+    if (error) {
+      throw new Error(`Error al eliminar rutina: ${error.message}`);
+    }
+
+    return true;
+  },
+
   async update(rutinaId: string, data: CreateRoutineRequest): Promise<string> {
     // Actualizar nombre de la rutina
     const { error: rutinaError } = await supabase
@@ -257,6 +294,7 @@ export const rutinaService = {
         .insert({
           rutina_id: rutinaId,
           dia_semana: dia.diaSemana,
+          ejercicio_bilbo_id: dia.ejercicioBilboId || null,
         })
         .select('id')
         .single();
@@ -272,6 +310,9 @@ export const rutinaService = {
             dia_de_rutina_id: diaRutina.id,
             ejercicio_id: ejercicio.ejercicioId,
             orden: ejercicio.orden,
+            es_bilbo: ejercicio.esBilbo || false,
+            rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
+            rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
           })
           .select('id')
           .single();
@@ -285,6 +326,8 @@ export const rutinaService = {
             ejercicio_planificado_id: ejPlan.id,
             numero_serie: serie.numeroSerie,
             peso_planificado: serie.pesoPlanificado || null,
+            rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
+            rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
           }));
 
           const { error: seriesError } = await supabase

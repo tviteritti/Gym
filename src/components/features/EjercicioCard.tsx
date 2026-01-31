@@ -18,6 +18,7 @@ interface EjercicioCardProps {
   ejerciciosDisponibles: Ejercicio[];
   onDelete?: () => void;
   esEjercicioAdicional?: boolean; // Para ejercicios fuera de la rutina
+  ejercicioBilboId?: string; // ID del ejercicio bilbo seleccionado para este día
 }
 
 export const EjercicioCard = ({
@@ -30,6 +31,7 @@ export const EjercicioCard = ({
   ejerciciosDisponibles,
   onDelete,
   esEjercicioAdicional = false,
+  ejercicioBilboId,
 }: EjercicioCardProps) => {
   const [series, setSeries] = useState<SerieEjecutada[]>([]);
   const [isSaved, setIsSaved] = useState(false);
@@ -177,11 +179,11 @@ export const EjercicioCard = ({
         setHasChanges(false);
       }
     } else {
-      // Si no hay series ejecutadas, inicializar con las series planificadas
-      // Pero el peso para método Bilbo serie 1 se establecerá en otro useEffect
+      // Si no hay series ejecutadas, inicializar con series vacías (no precargar valores)
+      // Solo el peso para método Bilbo serie 1 se establecerá en otro useEffect
       const nuevasSeries = ejercicio.seriesPlanificadas.map((sp) => ({
         numeroSerie: sp.numeroSerie,
-        pesoReal: sp.pesoPlanificado,
+        pesoReal: undefined,
         repeticiones: undefined,
       }));
       
@@ -352,13 +354,15 @@ export const EjercicioCard = ({
           
           {/* Records personales */}
           {recordPersonal && (
-            <div className="mt-2 p-2 glass-morphism rounded-lg border border-dark-border/50">
-              <div className="flex items-center gap-2 text-xs text-yellow-400">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <div className="mt-3 p-3 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border-2 border-yellow-500/30 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-400">
+                <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
-                <span className="font-semibold">Récord Personal:</span>
-                <span>{recordPersonal.peso} kg × {recordPersonal.reps} reps</span>
+                <div>
+                  <div className="text-sm font-bold">RÉCORD PERSONAL</div>
+                  <div className="text-base font-semibold">{recordPersonal.peso} kg × {recordPersonal.reps} reps</div>
+                </div>
               </div>
             </div>
           )}
@@ -409,28 +413,34 @@ export const EjercicioCard = ({
           const seriePlanificada = ejercicio.seriesPlanificadas.find(sp => sp.numeroSerie === numeroSerie);
           const serieEjecutada = series.find((s) => s.numeroSerie === numeroSerie);
           const esSerieAdicional = !seriePlanificada;
-          const esMetodoBilboSerie1 = ejercicioBilbo && numeroSerie === 1;
+          const esEjercicioBilboDelDia = ejercicioBilboId === ejercicio.ejercicioId;
+          const esMetodoBilboSerie1 = (ejercicioBilbo || esEjercicioBilboDelDia) && numeroSerie === 1;
           
           // Calcular peso sugerido para la primera serie del método Bilbo
           let pesoInicial: number | undefined = undefined;
           
-          // Si es método Bilbo serie 1, priorizar el próximo peso calculado
-          if (esMetodoBilboSerie1 && ejercicioBilbo) {
-            if (serieEjecutada?.pesoReal !== undefined) {
-              // Si ya hay una serie ejecutada guardada, usar ese peso
-              pesoInicial = serieEjecutada.pesoReal;
-            } else {
-              // Si no hay serie ejecutada, usar el próximo peso calculado
-              const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
-              if (proximoPeso !== null) {
-                pesoInicial = proximoPeso;
+          // Si es método Bilbo serie 1, priorizar el próximo peso calculado o no pedir peso si es bilbo del día
+          if (esMetodoBilboSerie1) {
+            if (esEjercicioBilboDelDia && !ejercicioBilbo) {
+              // Si es el ejercicio bilbo del día pero no está configurado en método Bilbo, no pedir peso
+              pesoInicial = undefined;
+            } else if (ejercicioBilbo) {
+              if (serieEjecutada?.pesoReal !== undefined) {
+                // Si ya hay una serie ejecutada guardada, usar ese peso
+                pesoInicial = serieEjecutada.pesoReal;
               } else {
-                pesoInicial = seriePlanificada?.pesoPlanificado;
+                // Si no hay serie ejecutada, usar el próximo peso calculado
+                const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
+                if (proximoPeso !== null) {
+                  pesoInicial = proximoPeso;
+                }
               }
+            } else {
+              pesoInicial = serieEjecutada?.pesoReal;
             }
           } else {
-            // Para series normales o no método Bilbo, usar el comportamiento estándar
-            pesoInicial = serieEjecutada?.pesoReal ?? seriePlanificada?.pesoPlanificado;
+            // Para series normales o no método Bilbo, solo usar valores ejecutados (no planificados)
+            pesoInicial = serieEjecutada?.pesoReal;
           }
           
           return (
@@ -446,45 +456,56 @@ export const EjercicioCard = ({
                   disabled={loading || (isSaved && !hasChanges && !isEditMode)}
                   hasUserInteracted={userInteracted || isEditMode}
                 />
-                 {esMetodoBilboSerie1 && ejercicioBilbo && (() => {
-                   const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
-                   return proximoPeso !== null ? (
-                     <div className="mt-2 space-y-1">
-                       <div className="flex items-center gap-2">
-                         <span className="text-xs text-purple-400">
-                           ⚡ Primera serie al fallo (Método Bilbo)
-                         </span>
-                         <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded font-semibold">
-                           Próximo: {proximoPeso} kg
-                         </span>
-                       </div>
-                       {maxRepsPesoExacto && (
-                         <div className="flex items-center gap-2">
-                           <span className="text-xs text-orange-400">
-                             🎯 Max reps en {maxRepsPesoExacto.peso} kg:
-                           </span>
-                           <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded font-semibold">
-                             {maxRepsPesoExacto.reps} reps
-                           </span>
-                         </div>
-                       )}
-                       {maxRepsPesoCercano && (
-                         <div className="flex items-center gap-2">
-                           <span className="text-xs text-green-400">
-                             🏆 Máx reps en pesos cercanos:
-                           </span>
-                           <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded font-semibold">
-                             {maxRepsPesoCercano.reps} reps ({maxRepsPesoCercano.peso} kg)
-                           </span>
-                         </div>
-                       )}
-                     </div>
-                   ) : (
-                     <p className="text-xs text-purple-400 mt-2">
-                       ⚡ Primera serie al fallo (Método Bilbo)
-                     </p>
-                   );
-                 })()}
+                  {esMetodoBilboSerie1 && (esEjercicioBilboDelDia || ejercicioBilbo) && (() => {
+                    if (esEjercicioBilboDelDia && !ejercicioBilbo) {
+                      return (
+                        <p className="text-xs text-purple-400 mt-2">
+                          ⚡ Ejercicio Bilbo del día (peso variable)
+                        </p>
+                      );
+                    }
+                    
+                    if (ejercicioBilbo) {
+                      const proximoPeso = calcularPesoSugerido(ejercicioBilbo, ultimoProgreso);
+                      return proximoPeso !== null ? (
+                        <div className="mt-2 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-purple-400">
+                              ⚡ Primera serie al fallo (Método Bilbo)
+                            </span>
+                            <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded font-semibold">
+                              Próximo: {proximoPeso} kg
+                            </span>
+                          </div>
+                          {maxRepsPesoExacto && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-orange-400">
+                                🎯 Max reps en {maxRepsPesoExacto.peso} kg:
+                              </span>
+                              <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded font-semibold">
+                                {maxRepsPesoExacto.reps} reps
+                              </span>
+                            </div>
+                          )}
+                          {maxRepsPesoCercano && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-green-400">
+                                🏆 Máx reps en pesos cercanos:
+                              </span>
+                              <span className="text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded font-semibold">
+                                {maxRepsPesoCercano.reps} reps ({maxRepsPesoCercano.peso} kg)
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-purple-400 mt-2">
+                          ⚡ Primera serie al fallo (Método Bilbo)
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
               </div>
               {esSerieAdicional && (
                 <Button

@@ -37,6 +37,8 @@ export interface SeriePlanificada {
   id: string;
   numeroSerie: number;
   pesoPlanificado?: number;
+  rangoRepeticionesMin?: number;
+  rangoRepeticionesMax?: number;
 }
 
 export interface EjercicioPlanificado {
@@ -44,6 +46,7 @@ export interface EjercicioPlanificado {
   ejercicioId: string;
   ejercicioNombre: string;
   orden: number;
+  esBilbo?: boolean;
   seriesPlanificadas: SeriePlanificada[];
 }
 
@@ -51,6 +54,7 @@ export interface DiaDeRutina {
   id: string;
   diaSemana: number;
   diaSemanaNombre: string;
+  ejercicioBilboId?: string;
   ejerciciosPlanificados: EjercicioPlanificado[];
 }
 
@@ -136,18 +140,24 @@ export interface CreateRoutineRequest {
 
 export interface DiaRutinaRequest {
   diaSemana: number;
+  ejercicioBilboId?: string;
   ejercicios: EjercicioRutinaRequest[];
 }
 
 export interface EjercicioRutinaRequest {
   ejercicioId: string;
   orden: number;
+  esBilbo?: boolean;
+  rangoRepeticionesMin?: number;
+  rangoRepeticionesMax?: number;
   series: SerieRutinaRequest[];
 }
 
 export interface SerieRutinaRequest {
   numeroSerie: number;
   pesoPlanificado?: number;
+  rangoRepeticionesMin?: number;
+  rangoRepeticionesMax?: number;
 }
 
 export interface StartTrainingDayRequest {

@@ -4,6 +4,7 @@ import { Layout } from "../components/layout/Layout"
 import { useAuthStore } from "../store/authStore"
 import { rutinaService } from "../services/rutinaService"
 import { ejercicioService } from "../services/ejercicioService"
+import { bilboService } from "../services/bilboService"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Card } from "../components/ui/Card"
@@ -23,11 +24,13 @@ export const EditarRutinaPage = () => {
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [error, setError] = useState("")
+  const [ejerciciosBilbo, setEjerciciosBilbo] = useState<any[]>([])
   const navigate = useNavigate()
 
   useEffect(() => {
     if (rutinaId && usuario) {
       loadData()
+      loadEjerciciosBilbo()
     }
   }, [rutinaId, usuario])
 
@@ -54,12 +57,18 @@ export const EditarRutinaPage = () => {
       // Convertir la rutina a formato de edición
       const diasEditables: DiaRutinaRequest[] = rutina.diasDeRutina.map((dia) => ({
         diaSemana: dia.diaSemana,
+        ejercicioBilboId: dia.ejercicioBilboId,
         ejercicios: dia.ejerciciosPlanificados.map((ej) => ({
           ejercicioId: ej.ejercicioId,
           orden: ej.orden,
+          esBilbo: ej.esBilbo,
+          rangoRepeticionesMin: ej.seriesPlanificadas[0]?.rangoRepeticionesMin,
+          rangoRepeticionesMax: ej.seriesPlanificadas[0]?.rangoRepeticionesMax,
           series: ej.seriesPlanificadas.map((serie) => ({
             numeroSerie: serie.numeroSerie,
             pesoPlanificado: serie.pesoPlanificado,
+            rangoRepeticionesMin: serie.rangoRepeticionesMin,
+            rangoRepeticionesMax: serie.rangoRepeticionesMax,
           })),
         })),
       }))
@@ -70,6 +79,16 @@ export const EditarRutinaPage = () => {
       setError("Error al cargar la rutina")
     } finally {
       setLoadingData(false)
+    }
+  }
+
+  const loadEjerciciosBilbo = async () => {
+    if (!usuario) return
+    try {
+      const data = await bilboService.getAll(usuario.id)
+      setEjerciciosBilbo(data)
+    } catch (error) {
+      console.error("Error al cargar ejercicios bilbo:", error)
     }
   }
 
@@ -102,6 +121,9 @@ export const EditarRutinaPage = () => {
     nuevosDias[diaIndex].ejercicios.push({
       ejercicioId: "",
       orden: nuevosDias[diaIndex].ejercicios.length + 1,
+      esBilbo: false,
+      rangoRepeticionesMin: undefined,
+      rangoRepeticionesMax: undefined,
       series: [{ numeroSerie: 1, pesoPlanificado: undefined }],
     })
     setDias(nuevosDias)
@@ -252,6 +274,28 @@ export const EditarRutinaPage = () => {
                   </select>
                 </div>
 
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-dark-text mb-2">
+                    Ejercicio Bilbo (opcional)
+                  </label>
+                  <select
+                    value={dia.ejercicioBilboId || ""}
+                    onChange={(e) => {
+                      const nuevosDias = [...dias]
+                      nuevosDias[diaIndex].ejercicioBilboId = e.target.value || undefined
+                      setDias(nuevosDias)
+                    }}
+                    className="w-full px-4 py-3 bg-white border border-dark-border rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-dark-accent"
+                  >
+                    <option value="">Selecciona un ejercicio Bilbo</option>
+                    {ejerciciosBilbo.map((ej) => (
+                      <option key={ej.id} value={ej.ejercicioId}>
+                        {ej.ejercicioNombre || ej.ejercicioId}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="space-y-4">
                   {dia.ejercicios.map((ejercicio, ejercicioIndex) => (
                     <div
@@ -298,6 +342,71 @@ export const EditarRutinaPage = () => {
                             </option>
                           ))}
                         </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id={`bilbo-${diaIndex}-${ejercicioIndex}`}
+                            checked={ejercicio.esBilbo || false}
+                            onChange={(e) =>
+                              actualizarEjercicio(
+                                diaIndex,
+                                ejercicioIndex,
+                                "esBilbo",
+                                e.target.checked
+                              )
+                            }
+                            className="mr-2"
+                          />
+                          <label htmlFor={`bilbo-${diaIndex}-${ejercicioIndex}`} className="text-sm text-dark-text">
+                            Es ejercicio Bilbo
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-sm font-medium text-dark-text mb-2">
+                            Reps Min
+                          </label>
+                          <NumberInput
+                            placeholder="Min"
+                            value={ejercicio.rangoRepeticionesMin ?? ""}
+                            onChange={(e) =>
+                              actualizarEjercicio(
+                                diaIndex,
+                                ejercicioIndex,
+                                "rangoRepeticionesMin",
+                                e.target.value ? parseInt(e.target.value) : undefined
+                              )
+                            }
+                            min={1}
+                            max={50}
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-dark-text mb-2">
+                            Reps Max
+                          </label>
+                          <NumberInput
+                            placeholder="Max"
+                            value={ejercicio.rangoRepeticionesMax ?? ""}
+                            onChange={(e) =>
+                              actualizarEjercicio(
+                                diaIndex,
+                                ejercicioIndex,
+                                "rangoRepeticionesMax",
+                                e.target.value ? parseInt(e.target.value) : undefined
+                              )
+                            }
+                            min={1}
+                            max={50}
+                            className="w-full"
+                          />
+                        </div>
                       </div>
 
                       <div className="mb-3">

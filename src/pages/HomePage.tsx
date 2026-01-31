@@ -319,6 +319,7 @@ export const HomePage = () => {
                         musculoPrincipal={ejercicioInfo?.musculoPrincipal}
                         ejerciciosDisponibles={ejercicios}
                         esEjercicioAdicional={esAdicional || esNuevo}
+                        ejercicioBilboId={diaDeRutina?.ejercicioBilboId}
                         onDelete={
                           esNuevo
                             ? () => handleEliminarEjercicioNuevo(ejercicio.id)

@@ -201,19 +201,36 @@ export const entrenamientoService = {
   },
 
   async getRecordPersonal(usuarioId: string, ejercicioId: string): Promise<{peso: number, reps: number} | null> {
-    // Usar JOIN para obtener las series del usuario y ejercicio específico
+    // Primero obtener los entrenamientos del usuario
+    const { data: entrenamientos, error: entrenamientosError } = await supabase
+      .from('entrenamientos')
+      .select('id')
+      .eq('usuario_id', usuarioId);
+
+    if (entrenamientosError) {
+      throw new Error(`Error al obtener entrenamientos: ${entrenamientosError.message}`);
+    }
+
+    if (!entrenamientos || entrenamientos.length === 0) {
+      return null;
+    }
+
+    // Obtener los IDs de entrenamientos del usuario
+    const entrenamientoIds = entrenamientos.map(e => e.id);
+
+    // Ahora buscar el record personal en esos entrenamientos
     const { data, error } = await supabase
       .from('series_ejecutadas')
       .select(`
         peso_real, 
         repeticiones,
-        ejercicio_ejecutado!inner(
-          usuario_id,
+        ejercicios_ejecutados!inner(
+          entrenamiento_id,
           ejercicio_id
         )
       `)
-      .eq('ejercicio_ejecutado.usuario_id', usuarioId)
-      .eq('ejercicio_ejecutado.ejercicio_id', ejercicioId)
+      .in('ejercicios_ejecutados.entrenamiento_id', entrenamientoIds)
+      .eq('ejercicios_ejecutados.ejercicio_id', ejercicioId)
       .not('peso_real', 'is', null)
       .not('repeticiones', 'is', null)
       .order('peso_real', { ascending: false })
@@ -239,19 +256,35 @@ export const entrenamientoService = {
     const pesoMin = pesoObjetivo - 2.5;
     const pesoMax = pesoObjetivo + 2.5;
 
+    // Primero obtener los entrenamientos del usuario
+    const { data: entrenamientos, error: entrenamientosError } = await supabase
+      .from('entrenamientos')
+      .select('id')
+      .eq('usuario_id', usuarioId);
+
+    if (entrenamientosError) {
+      throw new Error(`Error al obtener entrenamientos: ${entrenamientosError.message}`);
+    }
+
+    if (!entrenamientos || entrenamientos.length === 0) {
+      return null;
+    }
+
+    const entrenamientoIds = entrenamientos.map(e => e.id);
+
     // Usar JOIN para obtener las series del usuario y ejercicio específico
     const { data, error } = await supabase
       .from('series_ejecutadas')
       .select(`
         peso_real, 
         repeticiones,
-        ejercicio_ejecutado!inner(
-          usuario_id,
+        ejercicios_ejecutados!inner(
+          entrenamiento_id,
           ejercicio_id
         )
       `)
-      .eq('ejercicio_ejecutado.usuario_id', usuarioId)
-      .eq('ejercicio_ejecutado.ejercicio_id', ejercicioId)
+      .in('ejercicios_ejecutados.entrenamiento_id', entrenamientoIds)
+      .eq('ejercicios_ejecutados.ejercicio_id', ejercicioId)
       .gte('peso_real', pesoMin)
       .lte('peso_real', pesoMax)
       .not('repeticiones', 'is', null)
@@ -273,19 +306,35 @@ export const entrenamientoService = {
   },
 
   async getMaxRepsEnPesoExacto(usuarioId: string, ejercicioId: string, pesoObjetivo: number): Promise<{peso: number, reps: number} | null> {
+    // Primero obtener los entrenamientos del usuario
+    const { data: entrenamientos, error: entrenamientosError } = await supabase
+      .from('entrenamientos')
+      .select('id')
+      .eq('usuario_id', usuarioId);
+
+    if (entrenamientosError) {
+      throw new Error(`Error al obtener entrenamientos: ${entrenamientosError.message}`);
+    }
+
+    if (!entrenamientos || entrenamientos.length === 0) {
+      return null;
+    }
+
+    const entrenamientoIds = entrenamientos.map(e => e.id);
+
     // Usar JOIN para obtener las series del usuario y ejercicio específico
     const { data, error } = await supabase
       .from('series_ejecutadas')
       .select(`
         peso_real, 
         repeticiones,
-        ejercicio_ejecutado!inner(
-          usuario_id,
+        ejercicios_ejecutados!inner(
+          entrenamiento_id,
           ejercicio_id
         )
       `)
-      .eq('ejercicio_ejecutado.usuario_id', usuarioId)
-      .eq('ejercicio_ejecutado.ejercicio_id', ejercicioId)
+      .in('ejercicios_ejecutados.entrenamiento_id', entrenamientoIds)
+      .eq('ejercicios_ejecutados.ejercicio_id', ejercicioId)
       .eq('peso_real', pesoObjetivo)
       .not('repeticiones', 'is', null)
       .order('repeticiones', { ascending: false })

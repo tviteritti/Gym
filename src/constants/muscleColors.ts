@@ -13,6 +13,7 @@ const MUSCLE_COLORS_MAP: Record<string, string> = {
   hombro: '#70ad47', // verde oscuro
   hombros: '#70ad47', // verde oscuro (plural)
   trapecio: '#00ff00', // verde más claro
+  core: '#00bfff', // celeste fuerte (deepskyblue)
 };
 
 /**

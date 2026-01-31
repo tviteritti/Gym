@@ -64,6 +64,24 @@ export const RutinasPage = () => {
     }
   }
 
+  const handleDelete = async (rutinaId: string, rutinaNombre: string) => {
+    if (!usuario) return
+    
+    const confirmed = window.confirm(
+      `¿Estás seguro de que quieres eliminar la rutina "${rutinaNombre}"?\n\nEsta acción no se puede deshacer.`
+    )
+    
+    if (!confirmed) return
+    
+    try {
+      await rutinaService.delete(rutinaId, usuario.id)
+      await loadRutinas()
+    } catch (error) {
+      console.error("Error al eliminar rutina:", error)
+      alert(error instanceof Error ? error.message : "Error al eliminar la rutina")
+    }
+  }
+
   if (loading) {
     return (
       <Layout>
@@ -121,31 +139,40 @@ export const RutinasPage = () => {
                           )}
                         </p>
                       </div>
-                      <div className="flex gap-2 flex-wrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setExpandedRutinaId(isExpanded ? null : rutina.id)}
-                        >
-                          {isExpanded ? "Ocultar" : "Ver Detalle"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigate(`/rutinas/${rutina.id}/editar`)}
-                        >
-                          Editar
-                        </Button>
-                        {!rutina.activa && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => handleActivate(rutina.id)}
-                          >
-                            Activar
-                          </Button>
-                        )}
-                      </div>
+                       <div className="flex gap-2 flex-wrap">
+                         <Button
+                           variant="outline"
+                           size="sm"
+                           onClick={() => setExpandedRutinaId(isExpanded ? null : rutina.id)}
+                         >
+                           {isExpanded ? "Ocultar" : "Ver Detalle"}
+                         </Button>
+                         <Button
+                           variant="outline"
+                           size="sm"
+                           onClick={() => navigate(`/rutinas/${rutina.id}/editar`)}
+                         >
+                           Editar
+                         </Button>
+                         {!rutina.activa && (
+                           <>
+                             <Button
+                               variant="primary"
+                               size="sm"
+                               onClick={() => handleActivate(rutina.id)}
+                             >
+                               Activar
+                             </Button>
+                             <Button
+                               variant="danger"
+                               size="sm"
+                               onClick={() => handleDelete(rutina.id, rutina.nombre)}
+                             >
+                               Eliminar
+                             </Button>
+                           </>
+                         )}
+                       </div>
                     </div>
 
                     {isExpanded && (
