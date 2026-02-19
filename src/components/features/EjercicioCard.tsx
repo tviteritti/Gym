@@ -126,8 +126,15 @@ export const EjercicioCard = ({
       setIsSaved(false);
     }
     
-    // Cargar información del método Bilbo si existe
+    // Cargar información del método Bilbo solo si el ejercicio es el bilbo asignado al día
     const loadBilboInfo = async () => {
+      const esEjercicioBilboDelDia = ejercicioBilboId === ejercicioSeleccionadoId;
+      if (!esEjercicioBilboDelDia) {
+        setEjercicioBilbo(null);
+        setUltimoProgreso(null);
+        return;
+      }
+      
       try {
         const bilbo = await bilboService.getByEjercicio(usuarioId, ejercicioSeleccionadoId);
         setEjercicioBilbo(bilbo);
@@ -136,7 +143,6 @@ export const EjercicioCard = ({
           const progreso = await bilboService.getUltimoProgreso(usuarioId, ejercicioSeleccionadoId);
           setUltimoProgreso(progreso || null);
           
-          // Si es del método Bilbo y no hay series guardadas, sugerir peso para la primera serie
           if (!seriesEjecutadas || seriesEjecutadas.length === 0) {
             const pesoSugerido = calcularPesoSugerido(bilbo, progreso);
             if (pesoSugerido !== null) {
@@ -156,7 +162,6 @@ export const EjercicioCard = ({
           setUltimoProgreso(null);
         }
       } catch {
-        // Si hay error, simplemente no mostrar info de Bilbo
         setEjercicioBilbo(null);
         setUltimoProgreso(null);
       }
@@ -164,7 +169,7 @@ export const EjercicioCard = ({
     
     loadBilboInfo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ejercicioSeleccionadoId, usuarioId]);
+  }, [ejercicioSeleccionadoId, usuarioId, ejercicioBilboId]);
 
   // Sincronizar el estado interno cuando cambian las series ejecutadas (por ejemplo, al cambiar de día)
   useEffect(() => {

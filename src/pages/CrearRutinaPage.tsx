@@ -316,6 +316,53 @@ export const CrearRutinaPage = () => {
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <div>
                           <label className="block text-sm font-medium text-dark-text mb-2">
+                            Agrupación
+                          </label>
+                          <select
+                            value={ejercicio.tipoAgrupacion || ""}
+                            onChange={(e) => {
+                              const valor = e.target.value || undefined
+                              actualizarEjercicio(diaIndex, ejercicioIndex, "tipoAgrupacion", valor)
+                              if (!valor) {
+                                actualizarEjercicio(diaIndex, ejercicioIndex, "grupoAgrupacion", undefined)
+                              }
+                            }}
+                            className="w-full px-4 py-3 bg-white border border-dark-border rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-dark-accent"
+                          >
+                            <option value="">Ninguna</option>
+                            <option value="superserie">Superserie</option>
+                            <option value="biserie">Biserie</option>
+                          </select>
+                        </div>
+                        {ejercicio.tipoAgrupacion && (
+                          <div>
+                            <label className="block text-sm font-medium text-dark-text mb-2">
+                              Grupo #
+                            </label>
+                            <select
+                              value={ejercicio.grupoAgrupacion ?? ""}
+                              onChange={(e) =>
+                                actualizarEjercicio(
+                                  diaIndex,
+                                  ejercicioIndex,
+                                  "grupoAgrupacion",
+                                  e.target.value ? parseInt(e.target.value) : undefined
+                                )
+                              }
+                              className="w-full px-4 py-3 bg-white border border-dark-border rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-dark-accent"
+                            >
+                              <option value="">Seleccionar</option>
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <option key={n} value={n}>Grupo {n}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-sm font-medium text-dark-text mb-2">
                             Reps Min
                           </label>
                           <NumberInput

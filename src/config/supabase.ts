@@ -142,6 +142,8 @@ export type Database = {
           dia_de_rutina_id: string;
           ejercicio_id: string;
           orden: number;
+          tipo_agrupacion: string | null;
+          grupo_agrupacion: number | null;
           fecha_creacion: string;
         };
         Insert: {
@@ -149,6 +151,8 @@ export type Database = {
           dia_de_rutina_id: string;
           ejercicio_id: string;
           orden: number;
+          tipo_agrupacion?: string | null;
+          grupo_agrupacion?: number | null;
           fecha_creacion?: string;
         };
         Update: {
@@ -156,6 +160,8 @@ export type Database = {
           dia_de_rutina_id?: string;
           ejercicio_id?: string;
           orden?: number;
+          tipo_agrupacion?: string | null;
+          grupo_agrupacion?: number | null;
           fecha_creacion?: string;
         };
       };

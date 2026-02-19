@@ -11,7 +11,7 @@ import { Card } from '../components/ui/Card';
 import { DaySelector } from '../components/features/DaySelector';
 import { EjercicioCard } from '../components/features/EjercicioCard';
 import { formatDiaSemana, getDiaSemanaFromDate, getDateForDayOfWeek } from '../utils/formatters';
-import type { Rutina, Ejercicio, EjercicioPlanificado, EjercicioEjecutado } from '../types';
+import type { Rutina, Ejercicio, EjercicioPlanificado, EjercicioEjecutado, TipoAgrupacion } from '../types';
 
 export const HomePage = () => {
   const { usuario } = useAuthStore();
@@ -296,41 +296,135 @@ export const HomePage = () => {
             </div>
             <div className="space-y-6">
               {todosLosEjercicios.length > 0 ? (
-                todosLosEjercicios.map((ejercicio, index) => {
-                  const ejercicioEjecutado = entrenamiento?.ejerciciosEjecutados.find(
-                    (ee) => ee.ejercicioId === ejercicio.ejercicioId
-                  );
-                  const ejercicioInfo = ejercicios.find(e => e.id === ejercicio.ejercicioId);
-                  const esAdicional = ejerciciosAdicionales.some(ea => ea.id === ejercicio.id);
-                  const esNuevo = ejerciciosNuevos.some(en => en.id === ejercicio.id);
-                  
-                  return (
-                    <div 
-                      key={`${selectedDay}-${ejercicio.id}`}
-                      className="animate-fade-in"
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
-                      <EjercicioCard
-                        ejercicio={ejercicio}
-                        seriesEjecutadas={ejercicioEjecutado?.seriesEjecutadas}
-                        usuarioId={usuario!.id}
-                        fecha={fechaSeleccionada}
-                        onSave={recargarEntrenamiento}
-                        musculoPrincipal={ejercicioInfo?.musculoPrincipal}
-                        ejerciciosDisponibles={ejercicios}
-                        esEjercicioAdicional={esAdicional || esNuevo}
-                        ejercicioBilboId={diaDeRutina?.ejercicioBilboId}
-                        onDelete={
-                          esNuevo
-                            ? () => handleEliminarEjercicioNuevo(ejercicio.id)
-                            : esAdicional && ejercicioEjecutado
-                            ? () => handleEliminarEjercicioAdicional(ejercicioEjecutado)
-                            : undefined
-                        }
-                      />
-                    </div>
-                  );
-                })
+                (() => {
+                  const grupos = new Map<string, { tipo: TipoAgrupacion; ejercicios: typeof todosLosEjercicios }>();
+                  const ordenRenderizado: ({ tipo: 'grupo'; key: string; tipoAgrupacion: TipoAgrupacion; items: typeof todosLosEjercicios } | { tipo: 'solo'; item: typeof todosLosEjercicios[0] })[] = [];
+                  const gruposYaRenderizados = new Set<string>();
+
+                  todosLosEjercicios.forEach((ej) => {
+                    if (ej.tipoAgrupacion && ej.grupoAgrupacion != null) {
+                      const key = `${ej.tipoAgrupacion}-${ej.grupoAgrupacion}`;
+                      if (!grupos.has(key)) {
+                        grupos.set(key, { tipo: ej.tipoAgrupacion, ejercicios: [] });
+                      }
+                      grupos.get(key)!.ejercicios.push(ej);
+                    }
+                  });
+
+                  todosLosEjercicios.forEach((ej) => {
+                    if (ej.tipoAgrupacion && ej.grupoAgrupacion != null) {
+                      const key = `${ej.tipoAgrupacion}-${ej.grupoAgrupacion}`;
+                      if (!gruposYaRenderizados.has(key)) {
+                        gruposYaRenderizados.add(key);
+                        const grupo = grupos.get(key)!;
+                        ordenRenderizado.push({ tipo: 'grupo', key, tipoAgrupacion: grupo.tipo, items: grupo.ejercicios });
+                      }
+                    } else {
+                      ordenRenderizado.push({ tipo: 'solo', item: ej });
+                    }
+                  });
+
+                  let globalIndex = 0;
+                  return ordenRenderizado.map((entry) => {
+                    if (entry.tipo === 'grupo') {
+                      const esSuperserie = entry.tipoAgrupacion === 'superserie';
+                      const borderColor = esSuperserie ? 'border-cyan-500/60' : 'border-emerald-500/60';
+                      const bgColor = esSuperserie ? 'bg-cyan-500/10' : 'bg-emerald-500/10';
+                      const textColor = esSuperserie ? 'text-cyan-400' : 'text-emerald-400';
+                      const label = esSuperserie ? 'Superserie' : 'Biserie';
+                      const startIndex = globalIndex;
+                      globalIndex += entry.items.length;
+
+                      return (
+                        <div
+                          key={entry.key}
+                          className={`relative rounded-2xl border-2 ${borderColor} ${bgColor} p-4 space-y-4 animate-fade-in`}
+                          style={{ animationDelay: `${startIndex * 100}ms` }}
+                        >
+                          <div className={`flex items-center gap-2 mb-2 ${textColor}`}>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span className="text-sm font-bold uppercase tracking-wide">{label}</span>
+                          </div>
+                          {entry.items.map((ejercicio, idx) => {
+                            const ejercicioEjecutado = entrenamiento?.ejerciciosEjecutados.find(
+                              (ee) => ee.ejercicioId === ejercicio.ejercicioId
+                            );
+                            const ejercicioInfo = ejercicios.find(e => e.id === ejercicio.ejercicioId);
+                            const esAdicional = ejerciciosAdicionales.some(ea => ea.id === ejercicio.id);
+                            const esNuevo = ejerciciosNuevos.some(en => en.id === ejercicio.id);
+                            return (
+                              <div key={`${selectedDay}-${ejercicio.id}`}>
+                                <EjercicioCard
+                                  ejercicio={ejercicio}
+                                  seriesEjecutadas={ejercicioEjecutado?.seriesEjecutadas}
+                                  usuarioId={usuario!.id}
+                                  fecha={fechaSeleccionada}
+                                  onSave={recargarEntrenamiento}
+                                  musculoPrincipal={ejercicioInfo?.musculoPrincipal}
+                                  ejerciciosDisponibles={ejercicios}
+                                  esEjercicioAdicional={esAdicional || esNuevo}
+                                  ejercicioBilboId={diaDeRutina?.ejercicioBilboId}
+                                  onDelete={
+                                    esNuevo
+                                      ? () => handleEliminarEjercicioNuevo(ejercicio.id)
+                                      : esAdicional && ejercicioEjecutado
+                                      ? () => handleEliminarEjercicioAdicional(ejercicioEjecutado)
+                                      : undefined
+                                  }
+                                />
+                                {idx < entry.items.length - 1 && (
+                                  <div className={`flex items-center justify-center my-1 ${textColor}`}>
+                                    <div className="w-6 border-t border-current"></div>
+                                    <span className="mx-2 text-xs font-semibold">+</span>
+                                    <div className="w-6 border-t border-current"></div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    } else {
+                      const ejercicio = entry.item;
+                      const currentIndex = globalIndex;
+                      globalIndex++;
+                      const ejercicioEjecutado = entrenamiento?.ejerciciosEjecutados.find(
+                        (ee) => ee.ejercicioId === ejercicio.ejercicioId
+                      );
+                      const ejercicioInfo = ejercicios.find(e => e.id === ejercicio.ejercicioId);
+                      const esAdicional = ejerciciosAdicionales.some(ea => ea.id === ejercicio.id);
+                      const esNuevo = ejerciciosNuevos.some(en => en.id === ejercicio.id);
+                      return (
+                        <div 
+                          key={`${selectedDay}-${ejercicio.id}`}
+                          className="animate-fade-in"
+                          style={{ animationDelay: `${currentIndex * 100}ms` }}
+                        >
+                          <EjercicioCard
+                            ejercicio={ejercicio}
+                            seriesEjecutadas={ejercicioEjecutado?.seriesEjecutadas}
+                            usuarioId={usuario!.id}
+                            fecha={fechaSeleccionada}
+                            onSave={recargarEntrenamiento}
+                            musculoPrincipal={ejercicioInfo?.musculoPrincipal}
+                            ejerciciosDisponibles={ejercicios}
+                            esEjercicioAdicional={esAdicional || esNuevo}
+                            ejercicioBilboId={diaDeRutina?.ejercicioBilboId}
+                            onDelete={
+                              esNuevo
+                                ? () => handleEliminarEjercicioNuevo(ejercicio.id)
+                                : esAdicional && ejercicioEjecutado
+                                ? () => handleEliminarEjercicioAdicional(ejercicioEjecutado)
+                                : undefined
+                            }
+                          />
+                        </div>
+                      );
+                    }
+                  });
+                })()
               ) : (
                 <Card glow className="animate-fade-in">
                   <div className="py-16 text-center">

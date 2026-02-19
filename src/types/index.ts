@@ -41,12 +41,16 @@ export interface SeriePlanificada {
   rangoRepeticionesMax?: number;
 }
 
+export type TipoAgrupacion = 'superserie' | 'biserie';
+
 export interface EjercicioPlanificado {
   id: string;
   ejercicioId: string;
   ejercicioNombre: string;
   orden: number;
   esBilbo?: boolean;
+  tipoAgrupacion?: TipoAgrupacion;
+  grupoAgrupacion?: number;
   seriesPlanificadas: SeriePlanificada[];
 }
 
@@ -148,6 +152,8 @@ export interface EjercicioRutinaRequest {
   ejercicioId: string;
   orden: number;
   esBilbo?: boolean;
+  tipoAgrupacion?: TipoAgrupacion;
+  grupoAgrupacion?: number;
   rangoRepeticionesMin?: number;
   rangoRepeticionesMax?: number;
   series: SerieRutinaRequest[];

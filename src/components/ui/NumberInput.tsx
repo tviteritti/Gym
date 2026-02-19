@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes } from 'react';
-import { forwardRef } from 'react';
+import { forwardRef, useCallback } from 'react';
 
 interface NumberInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string;
@@ -11,7 +11,15 @@ interface NumberInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
 }
 
 export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ label, error, fullWidth = false, className = '', step, min, max, ...props }, ref) => {
+  ({ label, error, fullWidth = false, className = '', step, min, max, onFocus, ...props }, ref) => {
+
+    const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+      const scrollY = window.scrollY;
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: scrollY, behavior: 'instant' });
+      });
+      onFocus?.(e);
+    }, [onFocus]);
 
     return (
       <div className={fullWidth ? 'w-full' : ''}>
@@ -23,9 +31,11 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
         <input
           ref={ref}
           type="number"
+          inputMode="decimal"
           step={step}
           min={min}
           max={max}
+          onFocus={handleFocus}
           className={`
             block px-2 sm:px-4 py-2 sm:py-3 text-sm sm:text-lg text-center
             bg-white border rounded-lg text-black

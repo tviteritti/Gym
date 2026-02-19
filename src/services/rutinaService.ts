@@ -21,6 +21,8 @@ const mapRutinaFromDB = (rutinaData: any): Rutina => {
         ejercicioNombre: (ejPlan.ejercicios as any)?.nombre || '',
         orden: ejPlan.orden,
         esBilbo: ejPlan.es_bilbo || false,
+        tipoAgrupacion: ejPlan.tipo_agrupacion || undefined,
+        grupoAgrupacion: ejPlan.grupo_agrupacion ?? undefined,
         seriesPlanificadas,
       };
     });
@@ -93,6 +95,8 @@ export const rutinaService = {
             ejercicio_id: ejercicio.ejercicioId,
             orden: ejercicio.orden,
             es_bilbo: ejercicio.esBilbo || false,
+            tipo_agrupacion: ejercicio.tipoAgrupacion || null,
+            grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
             rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
             rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
           })
@@ -311,6 +315,8 @@ export const rutinaService = {
             ejercicio_id: ejercicio.ejercicioId,
             orden: ejercicio.orden,
             es_bilbo: ejercicio.esBilbo || false,
+            tipo_agrupacion: ejercicio.tipoAgrupacion || null,
+            grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
             rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
             rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
           })
