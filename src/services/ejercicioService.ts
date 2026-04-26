@@ -204,7 +204,7 @@ export const ejercicioService = {
     );
 
     // Ordenar ejecuciones por fecha descendente
-    ejecuciones.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    ejecuciones.sort((a, b) => b.fecha.localeCompare(a.fecha));
 
     // Obtener el record del ejercicio
     const { data: record, error: recordError } = await supabase

@@ -78,6 +78,12 @@ export interface SerieEjecutada {
   repeticiones?: number;
 }
 
+/** Última sesión registrada antes de una fecha (para comparar progreso). */
+export interface UltimaSesionEjercicio {
+  fecha: string;
+  series: { numeroSerie: number; pesoReal?: number; repeticiones?: number }[];
+}
+
 export interface EjercicioEjecutado {
   id?: string;
   ejercicioId: string;

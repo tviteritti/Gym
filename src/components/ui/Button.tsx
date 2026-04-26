@@ -65,13 +65,14 @@ export const Button = ({
   };
 
   const widthClass = fullWidth ? 'w-full' : '';
+  const innerClass = `relative z-10 inline-flex items-center justify-center gap-2 ${fullWidth ? 'w-full' : ''}`;
 
   return (
     <button
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${widthClass} ${className}`}
       {...props}
     >
-      <span className="relative z-10">{children}</span>
+      <span className={innerClass}>{children}</span>
     </button>
   );
 };

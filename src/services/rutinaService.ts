@@ -77,7 +77,7 @@ export const rutinaService = {
         .insert({
           rutina_id: rutina.id,
           dia_semana: dia.diaSemana,
-          ejercicio_bilbo_id: dia.ejercicioBilboId || null,
+          ejercicio_bilbo_id: null,
         })
         .select('id')
         .single();
@@ -97,8 +97,8 @@ export const rutinaService = {
             es_bilbo: ejercicio.esBilbo || false,
             tipo_agrupacion: ejercicio.tipoAgrupacion || null,
             grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
-            rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
-            rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
+            rango_repeticiones_min: null,
+            rango_repeticiones_max: null,
           })
           .select('id')
           .single();
@@ -112,9 +112,9 @@ export const rutinaService = {
           const series = ejercicio.series.map((serie) => ({
             ejercicio_planificado_id: ejPlan.id,
             numero_serie: serie.numeroSerie,
-            peso_planificado: serie.pesoPlanificado || null,
-            rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
-            rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
+            peso_planificado: null,
+            rango_repeticiones_min: null,
+            rango_repeticiones_max: null,
           }));
 
           const { error: seriesError } = await supabase
@@ -298,7 +298,7 @@ export const rutinaService = {
         .insert({
           rutina_id: rutinaId,
           dia_semana: dia.diaSemana,
-          ejercicio_bilbo_id: dia.ejercicioBilboId || null,
+          ejercicio_bilbo_id: null,
         })
         .select('id')
         .single();
@@ -317,8 +317,8 @@ export const rutinaService = {
             es_bilbo: ejercicio.esBilbo || false,
             tipo_agrupacion: ejercicio.tipoAgrupacion || null,
             grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
-            rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
-            rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
+            rango_repeticiones_min: null,
+            rango_repeticiones_max: null,
           })
           .select('id')
           .single();
@@ -331,9 +331,9 @@ export const rutinaService = {
           const series = ejercicio.series.map((serie) => ({
             ejercicio_planificado_id: ejPlan.id,
             numero_serie: serie.numeroSerie,
-            peso_planificado: serie.pesoPlanificado || null,
-            rango_repeticiones_min: ejercicio.rangoRepeticionesMin || null,
-            rango_repeticiones_max: ejercicio.rangoRepeticionesMax || null,
+            peso_planificado: null,
+            rango_repeticiones_min: null,
+            rango_repeticiones_max: null,
           }));
 
           const { error: seriesError } = await supabase

@@ -8,6 +8,7 @@ import { Button } from "../components/ui/Button"
 import { Card } from "../components/ui/Card"
 import type { Rutina, Ejercicio } from "../types"
 import { getMuscleColorWithDefault } from "../constants/muscleColors"
+import { calcularResumenSeriesRutina } from "../utils/rutinaVolumen"
 
 export const RutinasPage = () => {
   const { usuario } = useAuthStore()
@@ -121,6 +122,7 @@ export const RutinasPage = () => {
             <div className="space-y-4">
               {rutinas.map((rutina) => {
                 const isExpanded = expandedRutinaId === rutina.id
+                const resumenSeries = calcularResumenSeriesRutina(rutina, ejercicios)
                 return (
                   <Card key={rutina.id}>
                     <div className="flex justify-between items-start">
@@ -181,14 +183,24 @@ export const RutinasPage = () => {
                           Días de la Rutina
                         </h4>
                         <div className="space-y-4">
-                          {rutina.diasDeRutina.map((dia) => (
+                          {rutina.diasDeRutina.map((dia) => {
+                            const seriesDia = dia.ejerciciosPlanificados.reduce(
+                              (acc, ep) => acc + (ep.seriesPlanificadas?.length ?? 0),
+                              0
+                            )
+                            return (
                             <div
                               key={dia.id}
                               className="p-3 bg-dark-surface rounded-lg border border-dark-border"
                             >
-                              <h5 className="font-semibold text-dark-text mb-2">
-                                {dia.diaSemanaNombre}
-                              </h5>
+                              <div className="flex justify-between items-baseline gap-2 mb-2">
+                                <h5 className="font-semibold text-dark-text">
+                                  {dia.diaSemanaNombre}
+                                </h5>
+                                <span className="text-xs text-dark-text-muted tabular-nums">
+                                  {seriesDia} {seriesDia === 1 ? "serie" : "series"}
+                                </span>
+                              </div>
                               {dia.ejerciciosPlanificados.length === 0 ? (
                                 <p className="text-sm text-dark-text-muted">
                                   No hay ejercicios planificados
@@ -198,6 +210,7 @@ export const RutinasPage = () => {
                                   {dia.ejerciciosPlanificados.map((ejercicio) => {
                                     const ejercicioInfo = ejercicios.find(e => e.id === ejercicio.ejercicioId)
                                     const color = ejercicioInfo ? getMuscleColorWithDefault(ejercicioInfo.musculoPrincipal) : 'transparent'
+                                    const nSeries = ejercicio.seriesPlanificadas.length
                                     return (
                                       <div
                                         key={ejercicio.id}
@@ -207,29 +220,94 @@ export const RutinasPage = () => {
                                           borderLeftWidth: color !== 'transparent' ? '4px' : undefined,
                                         }}
                                       >
-                                        <div className="flex justify-between items-start mb-1">
-                                          <span className="font-medium text-dark-text">
+                                        <div className="flex flex-wrap justify-between items-center gap-1 mb-0.5">
+                                          <span className="font-medium text-dark-text text-sm">
                                             {ejercicio.orden}. {ejercicio.ejercicioNombre}
                                           </span>
+                                          {ejercicio.esBilbo && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/25 text-purple-300">
+                                              Bilbo
+                                            </span>
+                                          )}
                                         </div>
-                                        {ejercicio.seriesPlanificadas.length > 0 && (
-                                          <div className="mt-2 text-sm text-dark-text-muted">
-                                            <span className="font-medium">Series:</span>{" "}
-                                            {ejercicio.seriesPlanificadas
-                                              .map(
-                                                (s) =>
-                                                  `${s.numeroSerie}${s.pesoPlanificado ? ` (${s.pesoPlanificado}kg)` : ""}`
-                                              )
-                                              .join(", ")}
-                                          </div>
-                                        )}
+                                        <p className="text-xs text-dark-text-muted">
+                                          {nSeries} {nSeries === 1 ? "serie" : "series"}
+                                        </p>
                                       </div>
                                     )
                                   })}
                                 </div>
                               )}
                             </div>
-                          ))}
+                          )
+                          })}
+                        </div>
+
+                        <div className="mt-6 space-y-4">
+                          <div>
+                            <h4 className="text-lg font-semibold text-dark-text mb-2">
+                              Series por día
+                            </h4>
+                            <div className="overflow-x-auto rounded-lg border border-dark-border">
+                              <table className="w-full text-sm text-left">
+                                <thead className="bg-dark-surface text-dark-text-muted uppercase text-xs">
+                                  <tr>
+                                    <th className="px-3 py-2 font-semibold">Día</th>
+                                    <th className="px-3 py-2 font-semibold text-right">Series</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="text-dark-text divide-y divide-dark-border">
+                                  {resumenSeries.porDia.map((row, idx) => (
+                                    <tr key={`${row.diaSemana}-${idx}`} className="bg-dark-bg/50">
+                                      <td className="px-3 py-2">{row.diaNombre}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums">{row.series}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="text-lg font-semibold text-dark-text mb-2">
+                              Series por grupo muscular (semana)
+                            </h4>
+                            <p className="text-xs text-dark-text-muted mb-3">
+                              Cada serie planificada en la rutina cuenta como 1. Total = suma de todas las series de la semana.
+                            </p>
+                            <div className="overflow-x-auto rounded-lg border border-dark-border">
+                              <table className="w-full text-sm text-left">
+                                <thead className="bg-dark-surface text-dark-text-muted uppercase text-xs">
+                                  <tr>
+                                    <th className="px-3 py-2 font-semibold">Grupo muscular</th>
+                                    <th className="px-3 py-2 font-semibold text-right">Series</th>
+                                    <th className="px-3 py-2 font-semibold text-right">% del total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="text-dark-text divide-y divide-dark-border">
+                                  {resumenSeries.porMusculo.map((row) => {
+                                    const pct =
+                                      resumenSeries.totalSemanal > 0
+                                        ? Math.round((row.series / resumenSeries.totalSemanal) * 1000) / 10
+                                        : 0
+                                    return (
+                                      <tr key={row.musculo} className="bg-dark-bg/50">
+                                        <td className="px-3 py-2">{row.musculo}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{row.series}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">{pct}%</td>
+                                      </tr>
+                                    )
+                                  })}
+                                  <tr className="bg-dark-surface font-semibold border-t-2 border-dark-border">
+                                    <td className="px-3 py-2">Total semanal</td>
+                                    <td className="px-3 py-2 text-right tabular-nums">
+                                      {resumenSeries.totalSemanal}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">100%</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}

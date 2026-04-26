@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/layout/Layout';
 import { useAuthStore } from '../store/authStore';
@@ -11,17 +11,28 @@ import { Card } from '../components/ui/Card';
 import { DaySelector } from '../components/features/DaySelector';
 import { EjercicioCard } from '../components/features/EjercicioCard';
 import { formatDiaSemana, getDiaSemanaFromDate, getDateForDayOfWeek } from '../utils/formatters';
-import type { Rutina, Ejercicio, EjercicioPlanificado, EjercicioEjecutado, TipoAgrupacion } from '../types';
+import type {
+  Rutina,
+  Ejercicio,
+  EjercicioPlanificado,
+  EjercicioEjecutado,
+  TipoAgrupacion,
+  UltimaSesionEjercicio,
+} from '../types';
 
 export const HomePage = () => {
   const { usuario } = useAuthStore();
-  const { entrenamiento, loadTodayTraining, loadTrainingByDate, clearEntrenamiento } = useEntrenamientoStore();
+  const { entrenamiento, loadTrainingByDate, clearEntrenamiento } = useEntrenamientoStore();
   const [rutina, setRutina] = useState<Rutina | null>(null);
   const [ejercicios, setEjercicios] = useState<Ejercicio[]>([]);
   const [ejerciciosNuevos, setEjerciciosNuevos] = useState<EjercicioPlanificado[]>([]);
   const [selectedDay, setSelectedDay] = useState(getDiaSemanaFromDate(new Date()));
   const [weekOffset, setWeekOffset] = useState(0); // 0 = esta semana, 1 = semana siguiente
   const [loading, setLoading] = useState(true);
+  const [ultimaSesionMap, setUltimaSesionMap] = useState<Record<
+    string,
+    UltimaSesionEjercicio | null
+  > | null>(null);
   const navigate = useNavigate();
   const loadedUsuarioIdRef = useRef<string | null>(null);
   const ejercicioNuevoCounterRef = useRef(0);
@@ -60,7 +71,6 @@ export const HomePage = () => {
       setLoading(true);
       await loadEjercicios();
       await loadRutina();
-      await loadTodayTraining(usuario.id);
       setLoading(false);
     };
 
@@ -78,6 +88,73 @@ export const HomePage = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario?.id, selectedDay, weekOffset]);
+
+  const entrenamientoSeriesSig = useMemo(() => {
+    if (!entrenamiento) return '';
+    return [
+      entrenamiento.id,
+      ...entrenamiento.ejerciciosEjecutados.map((e) =>
+        [
+          e.ejercicioId,
+          e.seriesEjecutadas
+            .map((s) => `${s.numeroSerie}:${s.pesoReal ?? ''}:${s.repeticiones ?? ''}`)
+            .join('|'),
+        ].join('@')
+      ),
+    ].join(';');
+  }, [entrenamiento]);
+
+  const ejerciciosNuevosSig = useMemo(
+    () => ejerciciosNuevos.map((e) => `${e.id}:${e.ejercicioId}`).join(','),
+    [ejerciciosNuevos]
+  );
+
+  useEffect(() => {
+    if (!usuario || !rutina) {
+      setUltimaSesionMap(null);
+      return;
+    }
+
+    const diaDR = rutina.diasDeRutina.find((d) => d.diaSemana === selectedDay);
+    const planned = diaDR?.ejerciciosPlanificados ?? [];
+    const idsEnRutina = new Set(planned.map((e) => e.ejercicioId));
+    const idsExecuted = (entrenamiento?.ejerciciosEjecutados ?? [])
+      .filter((ee) => !idsEnRutina.has(ee.ejercicioId))
+      .map((ee) => ee.ejercicioId);
+    const idsNuevos = ejerciciosNuevos.map((e) => e.ejercicioId);
+    const allIds = [...new Set([...planned.map((p) => p.ejercicioId), ...idsExecuted, ...idsNuevos])];
+    const fechaSel = getDateForDayOfWeek(selectedDay, weekOffset);
+
+    let cancelled = false;
+    setUltimaSesionMap(null);
+
+    (async () => {
+      try {
+        if (allIds.length === 0) {
+          if (cancelled) return;
+          setUltimaSesionMap({});
+          return;
+        }
+
+        const map = await entrenamientoService.getUltimasSesionesMap(
+          usuario.id,
+          allIds,
+          fechaSel,
+          selectedDay
+        );
+        if (cancelled) return;
+        setUltimaSesionMap(map);
+      } catch (e) {
+        console.error('Precarga última sesión:', e);
+        if (!cancelled) setUltimaSesionMap({});
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- entrenamiento y nuevos vía entrenamientoSeriesSig / ejerciciosNuevosSig
+  }, [usuario, rutina, selectedDay, weekOffset, entrenamientoSeriesSig, ejerciciosNuevosSig]);
 
   const diaDeRutina = rutina?.diasDeRutina?.find((d) => d.diaSemana === selectedDay);
   const ejerciciosDelDiaPlanificados = diaDeRutina?.ejerciciosPlanificados || [];
@@ -365,7 +442,9 @@ export const HomePage = () => {
                                   musculoPrincipal={ejercicioInfo?.musculoPrincipal}
                                   ejerciciosDisponibles={ejercicios}
                                   esEjercicioAdicional={esAdicional || esNuevo}
-                                  ejercicioBilboId={diaDeRutina?.ejercicioBilboId}
+                                  esBilboEnRutina={!!ejercicio.esBilbo}
+                                  ultimaSesionPorEjercicioId={ultimaSesionMap}
+                                  diaSemanaRutina={selectedDay}
                                   onDelete={
                                     esNuevo
                                       ? () => handleEliminarEjercicioNuevo(ejercicio.id)
@@ -411,7 +490,9 @@ export const HomePage = () => {
                             musculoPrincipal={ejercicioInfo?.musculoPrincipal}
                             ejerciciosDisponibles={ejercicios}
                             esEjercicioAdicional={esAdicional || esNuevo}
-                            ejercicioBilboId={diaDeRutina?.ejercicioBilboId}
+                            esBilboEnRutina={!!ejercicio.esBilbo}
+                            ultimaSesionPorEjercicioId={ultimaSesionMap}
+                            diaSemanaRutina={selectedDay}
                             onDelete={
                               esNuevo
                                 ? () => handleEliminarEjercicioNuevo(ejercicio.id)

@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { NumberInput } from '../components/ui/NumberInput';
 import { getMuscleColorWithDefault } from '../constants/muscleColors';
+import { formatFechaNumericaEs } from '../utils/formatters';
 import type { EjercicioMetodoBilbo, ProgresoMetodoBilbo, Ejercicio } from '../types';
 
 interface EjercicioBilboConProgreso extends EjercicioMetodoBilbo {
@@ -132,7 +133,7 @@ export const MetodoBilboPage = () => {
     return Array.from(agrupado.entries())
       .map(([peso, progresos]) => ({
         peso,
-        progresos: progresos.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()), // Más reciente primero
+        progresos: progresos.sort((a, b) => b.fecha.localeCompare(a.fecha)), // Más reciente primero
       }))
       .sort((a, b) => b.peso - a.peso); // Peso mayor primero
   };
@@ -346,7 +347,7 @@ export const MetodoBilboPage = () => {
                                 {grupo.progresos.length} {grupo.progresos.length === 1 ? 'registro' : 'registros'}
                                 {grupo.progresos.length > 1 && (
                                   <span className="ml-2">
-                                    ({new Date(primeraFecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })} - {new Date(ultimaFecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })})
+                                    ({formatFechaNumericaEs(primeraFecha, { day: '2-digit', month: '2-digit' })} - {formatFechaNumericaEs(ultimaFecha, { day: '2-digit', month: '2-digit' })})
                                   </span>
                                 )}
                               </p>
@@ -377,7 +378,7 @@ export const MetodoBilboPage = () => {
                                         ? 'bg-red-500/20 text-red-400'
                                         : 'bg-dark-hover text-dark-text'
                                     }`}
-                                    title={`${new Date(progreso.fecha).toLocaleDateString('es-ES')}: ${progreso.repeticiones} reps`}
+                                    title={`${formatFechaNumericaEs(progreso.fecha)}: ${progreso.repeticiones} reps`}
                                   >
                                     <span>{progreso.repeticiones}</span>
                                     {mejoraAnterior && <span className="text-green-400">↑</span>}
@@ -398,11 +399,7 @@ export const MetodoBilboPage = () => {
                                     className="flex justify-between items-center text-sm"
                                   >
                                     <span className="text-dark-text-muted">
-                                      {new Date(progreso.fecha).toLocaleDateString('es-ES', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric',
-                                      })}
+                                      {formatFechaNumericaEs(progreso.fecha)}
                                     </span>
                                     <span
                                       className={`font-semibold ${

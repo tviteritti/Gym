@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { NumberInput } from '../ui/NumberInput';
 
 interface SerieInputProps {
@@ -21,22 +21,11 @@ export const SerieInput = ({
   const [peso, setPeso] = useState<number | undefined>(pesoInicial);
   const [reps, setReps] = useState<number | undefined>(repsInicial);
   const [userInteracted, setUserInteracted] = useState(false);
-  const isInitialized = useRef(false);
 
-  // Solo inicializar valores una vez o cuando no hay interacción del usuario
   useEffect(() => {
-    if (!isInitialized.current) {
+    if (!userInteracted && !hasUserInteracted) {
       setPeso(pesoInicial);
       setReps(repsInicial);
-      isInitialized.current = true;
-    } else if (!userInteracted && !hasUserInteracted) {
-      // Solo actualizar si el usuario no ha interactuado y no hay cambios externos
-      if (pesoInicial !== undefined && peso !== pesoInicial) {
-        setPeso(pesoInicial);
-      }
-      if (repsInicial !== undefined && reps !== repsInicial) {
-        setReps(repsInicial);
-      }
     }
   }, [pesoInicial, repsInicial, userInteracted, hasUserInteracted]);
 
