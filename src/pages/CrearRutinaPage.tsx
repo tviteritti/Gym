@@ -8,6 +8,7 @@ import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Card } from "../components/ui/Card"
 import { RutinaEditorSidePanel } from "../components/features/RutinaEditorSidePanel"
+import { ExerciseSelect } from "../components/features/ExerciseSelect"
 import { getMuscleColorWithDefault } from "../constants/muscleColors"
 import {
   seriesDesdeCantidad,
@@ -278,21 +279,14 @@ export const CrearRutinaPage = () => {
                       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                       <div className="flex-1 min-w-[180px]">
                         <label className="sr-only">Ejercicio</label>
-                        <select
+                        <ExerciseSelect
+                          ejercicios={ejercicios}
                           value={ejercicio.ejercicioId}
-                          onChange={(e) =>
-                            actualizarEjercicio(diaIndex, ejercicioIndex, "ejercicioId", e.target.value)
+                          onChange={(ejercicioId) =>
+                            actualizarEjercicio(diaIndex, ejercicioIndex, "ejercicioId", ejercicioId)
                           }
                           required
-                          className={`w-full ${controlRowClass}`}
-                        >
-                          <option value="">Ejercicio…</option>
-                          {ejercicios.map((ej) => (
-                            <option key={ej.id} value={ej.id}>
-                              {ej.nombre}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </div>
                       <div className="w-14 shrink-0">
                         <label className="sr-only">Series</label>
