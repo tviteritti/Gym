@@ -16,6 +16,9 @@ export const ConfigurarBilboPage = () => {
   const [selectedEjercicioId, setSelectedEjercicioId] = useState('');
   const [pesoInicial, setPesoInicial] = useState<number>(0);
   const [incremento, setIncremento] = useState<number>(2.5);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPesoInicial, setEditPesoInicial] = useState<number>(0);
+  const [editIncremento, setEditIncremento] = useState<number>(2.5);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -97,6 +100,42 @@ export const ConfigurarBilboPage = () => {
       await loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error al eliminar ejercicio');
+    }
+  };
+
+  const startEdit = (ejercicioBilbo: EjercicioMetodoBilbo) => {
+    setEditingId(ejercicioBilbo.ejercicioId);
+    setEditPesoInicial(ejercicioBilbo.pesoInicial);
+    setEditIncremento(ejercicioBilbo.incremento);
+    setError('');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditPesoInicial(0);
+    setEditIncremento(2.5);
+  };
+
+  const handleUpdate = async (ejercicioId: string) => {
+    if (!usuario || editPesoInicial <= 0 || editIncremento <= 0) {
+      setError('Por favor completa todos los campos correctamente');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await bilboService.update(usuario.id, ejercicioId, {
+        pesoInicial: editPesoInicial,
+        incremento: editIncremento,
+      });
+      cancelEdit();
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al actualizar ejercicio');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -207,35 +246,95 @@ export const ConfigurarBilboPage = () => {
                 {ejerciciosBilbo.map((ejercicioBilbo) => (
                   <div
                     key={ejercicioBilbo.id}
-                    className="p-4 bg-dark-surface rounded-lg border border-dark-border flex justify-between items-center"
+                    className="p-4 bg-dark-surface rounded-lg border border-dark-border"
                   >
-                    <div className="flex-1">
-                      <h3 className="text-lg font-bold text-dark-text mb-2">
-                        {ejercicioBilbo.ejercicioNombre}
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <p className="text-dark-text-muted">Peso Inicial</p>
-                          <p className="font-semibold text-dark-text">
-                            {ejercicioBilbo.pesoInicial} kg
-                          </p>
+                    {editingId === ejercicioBilbo.ejercicioId ? (
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-bold text-dark-text">
+                          {ejercicioBilbo.ejercicioNombre}
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <NumberInput
+                            label="Peso Inicial (kg) *"
+                            value={editPesoInicial}
+                            onChange={(e) => setEditPesoInicial(parseFloat(e.target.value) || 0)}
+                            min={0}
+                            step={0.5}
+                            required
+                            fullWidth
+                          />
+                          <div>
+                            <label className="block text-sm font-medium text-dark-text mb-2">
+                              Incremento (kg) *
+                            </label>
+                            <select
+                              value={editIncremento}
+                              onChange={(e) => setEditIncremento(parseFloat(e.target.value))}
+                              required
+                              className="w-full px-4 py-3 bg-white border border-dark-border rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-dark-accent"
+                            >
+                              <option value={2.5}>2.5 kg</option>
+                              <option value={5}>5 kg</option>
+                            </select>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-dark-text-muted">Incremento</p>
-                          <p className="font-semibold text-dark-text">
-                            +{ejercicioBilbo.incremento} kg
-                          </p>
+                        {error && (
+                          <div className="p-3 bg-red-600/20 border border-red-600/30 rounded-lg text-red-400 text-sm">
+                            {error}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleUpdate(ejercicioBilbo.ejercicioId)}
+                            disabled={saving}
+                            size="sm"
+                          >
+                            {saving ? 'Guardando...' : 'Guardar'}
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saving}>
+                            Cancelar
+                          </Button>
                         </div>
                       </div>
-                    </div>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDelete(ejercicioBilbo.ejercicioId)}
-                      className="ml-4"
-                    >
-                      Eliminar
-                    </Button>
+                    ) : (
+                      <div className="flex justify-between items-center">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-bold text-dark-text mb-2">
+                            {ejercicioBilbo.ejercicioNombre}
+                          </h3>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-dark-text-muted">Peso Inicial</p>
+                              <p className="font-semibold text-dark-text">
+                                {ejercicioBilbo.pesoInicial} kg
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-dark-text-muted">Incremento</p>
+                              <p className="font-semibold text-dark-text">
+                                +{ejercicioBilbo.incremento} kg
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => startEdit(ejercicioBilbo)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDelete(ejercicioBilbo.ejercicioId)}
+                          >
+                            Eliminar
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

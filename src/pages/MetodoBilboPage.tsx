@@ -9,6 +9,7 @@ import { Card } from '../components/ui/Card';
 import { NumberInput } from '../components/ui/NumberInput';
 import { getMuscleColorWithDefault } from '../constants/muscleColors';
 import { formatFechaNumericaEs } from '../utils/formatters';
+import { calcularProximoPesoBilbo } from '../utils/bilbo';
 import type { EjercicioMetodoBilbo, ProgresoMetodoBilbo, Ejercicio } from '../types';
 
 interface EjercicioBilboConProgreso extends EjercicioMetodoBilbo {
@@ -29,6 +30,12 @@ export const MetodoBilboPage = () => {
   const [repsProgreso, setRepsProgreso] = useState<number>(0);
   const [savingProgreso, setSavingProgreso] = useState(false);
   const [errorProgreso, setErrorProgreso] = useState('');
+  const [showEditConfig, setShowEditConfig] = useState(false);
+  const [editPesoInicial, setEditPesoInicial] = useState(0);
+  const [editIncremento, setEditIncremento] = useState(2.5);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [errorEdit, setErrorEdit] = useState('');
+  const [reiniciando, setReiniciando] = useState(false);
   const navigate = useNavigate();
   const hasLoadedRef = useRef(false);
 
@@ -41,10 +48,10 @@ export const MetodoBilboPage = () => {
     }
   }, [usuario]);
 
-  const loadEjerciciosBilbo = async () => {
+  const loadEjerciciosBilbo = async (opts?: { silent?: boolean }) => {
     if (!usuario) return;
     try {
-      setLoading(true);
+      if (!opts?.silent) setLoading(true);
       const [data, ejerciciosData] = await Promise.all([
         bilboService.getAll(usuario.id),
         ejercicioService.getAll(),
@@ -59,18 +66,15 @@ export const MetodoBilboPage = () => {
             .getUltimoProgreso(usuario.id, ejercicio.ejercicioId)
             .catch(() => null);
           
-          // Calcular próximo peso
-          const proximoPeso = ultimoProgreso && ultimoProgreso.repeticiones >= 15
-            ? ultimoProgreso.pesoActual + ejercicio.incremento
-            : ejercicio.pesoInicial;
+          const proximoPeso = calcularProximoPesoBilbo(ejercicio, ultimoProgreso) ?? ejercicio.pesoInicial;
           
-          // Buscar registro anterior con ese peso
+          // Buscar registro anterior con ese peso (ignorar reinicios con 0 reps)
           let repsProximoPeso: number | null = null;
           if (ultimoProgreso) {
             try {
               const historialCompleto = await bilboService.getHistorialProgreso(usuario.id, ejercicio.ejercicioId);
               const registroAnterior = historialCompleto.find(
-                p => p.pesoActual === proximoPeso && p.id !== ultimoProgreso.id
+                p => p.pesoActual === proximoPeso && p.id !== ultimoProgreso.id && p.repeticiones > 0
               );
               if (registroAnterior) {
                 repsProximoPeso = registroAnterior.repeticiones;
@@ -88,7 +92,7 @@ export const MetodoBilboPage = () => {
     } catch (error) {
       console.error('Error al cargar ejercicios del método Bilbo:', error);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   };
 
@@ -98,20 +102,85 @@ export const MetodoBilboPage = () => {
       const historialData = await bilboService.getHistorialProgreso(usuario.id, ejercicio.ejercicioId);
       setHistorial(historialData);
       setSelectedEjercicio(ejercicio);
+      setShowEditConfig(false);
+      setShowCargarProgreso(false);
+      setErrorEdit('');
+      setErrorProgreso('');
     } catch (error) {
       console.error('Error al cargar historial:', error);
     }
   };
 
   const getPesoSiguiente = (ejercicio: EjercicioMetodoBilbo): number => {
-    // Obtener el último progreso para calcular el siguiente peso
     const ultimoProgreso = historial.length > 0 ? historial[0] : null;
-    if (!ultimoProgreso || ultimoProgreso.repeticiones < 15) {
-      // Si no hay progreso o las reps fueron < 15, volver al peso inicial
-      return ejercicio.pesoInicial;
+    return calcularProximoPesoBilbo(ejercicio, ultimoProgreso) ?? ejercicio.pesoInicial;
+  };
+
+  const puedeReiniciar = (ejercicio: EjercicioMetodoBilbo): boolean => {
+    return getPesoSiguiente(ejercicio) !== ejercicio.pesoInicial;
+  };
+
+  const startEditConfig = () => {
+    if (!selectedEjercicio) return;
+    setEditPesoInicial(selectedEjercicio.pesoInicial);
+    setEditIncremento(selectedEjercicio.incremento);
+    setShowEditConfig(true);
+    setErrorEdit('');
+  };
+
+  const handleGuardarConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!usuario || !selectedEjercicio || editPesoInicial <= 0 || editIncremento <= 0) {
+      setErrorEdit('Por favor completa todos los campos correctamente');
+      return;
     }
-    // Si las reps fueron >= 15, incrementar peso
-    return ultimoProgreso.pesoActual + ejercicio.incremento;
+
+    setSavingEdit(true);
+    setErrorEdit('');
+
+    try {
+      await bilboService.update(usuario.id, selectedEjercicio.ejercicioId, {
+        pesoInicial: editPesoInicial,
+        incremento: editIncremento,
+      });
+
+      const actualizado: EjercicioMetodoBilbo = {
+        ...selectedEjercicio,
+        pesoInicial: editPesoInicial,
+        incremento: editIncremento,
+      };
+      setSelectedEjercicio(actualizado);
+      setShowEditConfig(false);
+      await loadEjerciciosBilbo({ silent: true });
+    } catch (err) {
+      setErrorEdit(err instanceof Error ? err.message : 'Error al actualizar');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleReiniciarCiclo = async () => {
+    if (!usuario || !selectedEjercicio) return;
+    if (!confirm(
+      '¿Reiniciar el ciclo? El próximo peso volverá al peso inicial. El historial se conserva; solo se marca el fin del ciclo actual.'
+    )) {
+      return;
+    }
+
+    setReiniciando(true);
+    try {
+      await bilboService.reiniciarCiclo(usuario.id, selectedEjercicio.ejercicioId);
+      const historialData = await bilboService.getHistorialProgreso(
+        usuario.id,
+        selectedEjercicio.ejercicioId
+      );
+      setHistorial(historialData);
+      await loadEjerciciosBilbo({ silent: true });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al reiniciar el ciclo');
+    } finally {
+      setReiniciando(false);
+    }
   };
 
   // Agrupar historial por peso para vista comparativa
@@ -160,6 +229,7 @@ export const MetodoBilboPage = () => {
       // Recargar historial
       const historialData = await bilboService.getHistorialProgreso(usuario.id, selectedEjercicio.ejercicioId);
       setHistorial(historialData);
+      await loadEjerciciosBilbo({ silent: true });
       
       // Limpiar formulario
       setFechaProgreso('');
@@ -203,6 +273,8 @@ export const MetodoBilboPage = () => {
                 onClick={() => {
                   setSelectedEjercicio(null);
                   setHistorial([]);
+                  setShowEditConfig(false);
+                  setShowCargarProgreso(false);
                 }}
                 className="mb-4"
               >
@@ -219,35 +291,107 @@ export const MetodoBilboPage = () => {
                   };
                 })()}
               >
-                <h2 className="text-2xl font-bold mb-4 text-dark-text">
-                  {selectedEjercicio.ejercicioNombre}
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div>
-                    <p className="text-sm text-dark-text-muted">Peso Inicial</p>
-                    <p className="text-2xl font-bold text-dark-text">
-                      {selectedEjercicio.pesoInicial} kg
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-dark-text-muted">Incremento</p>
-                    <p className="text-2xl font-bold text-dark-text">
-                      +{selectedEjercicio.incremento} kg
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-dark-text-muted">Último Peso</p>
-                    <p className="text-2xl font-bold text-dark-text">
-                      {historial.length > 0 ? `${historial[0].pesoActual} kg` : '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-dark-text-muted">Próximo Peso</p>
-                    <p className="text-2xl font-bold text-blue-400">
-                      {getPesoSiguiente(selectedEjercicio)} kg
-                    </p>
+                <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
+                  <h2 className="text-2xl font-bold text-dark-text">
+                    {selectedEjercicio.ejercicioNombre}
+                  </h2>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={startEditConfig}>
+                      Editar
+                    </Button>
+                    {puedeReiniciar(selectedEjercicio) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleReiniciarCiclo}
+                        disabled={reiniciando}
+                      >
+                        {reiniciando ? 'Reiniciando...' : 'Reiniciar peso'}
+                      </Button>
+                    )}
                   </div>
                 </div>
+
+                {showEditConfig ? (
+                  <form onSubmit={handleGuardarConfig} className="mb-4 p-4 bg-dark-surface rounded-lg border border-dark-border space-y-4">
+                    <h4 className="font-semibold text-dark-text">Editar configuración</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <NumberInput
+                        label="Peso Inicial (kg) *"
+                        value={editPesoInicial}
+                        onChange={(e) => setEditPesoInicial(parseFloat(e.target.value) || 0)}
+                        min={0}
+                        step={0.5}
+                        required
+                        fullWidth
+                      />
+                      <div>
+                        <label className="block text-sm font-medium text-dark-text mb-2">
+                          Incremento (kg) *
+                        </label>
+                        <select
+                          value={editIncremento}
+                          onChange={(e) => setEditIncremento(parseFloat(e.target.value))}
+                          required
+                          className="w-full px-4 py-3 bg-white border border-dark-border rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-dark-accent"
+                        >
+                          <option value={2.5}>2.5 kg</option>
+                          <option value={5}>5 kg</option>
+                        </select>
+                      </div>
+                    </div>
+                    {errorEdit && (
+                      <div className="p-3 bg-red-600/20 border border-red-600/30 rounded-lg text-red-400 text-sm">
+                        {errorEdit}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button type="submit" size="sm" disabled={savingEdit}>
+                        {savingEdit ? 'Guardando...' : 'Guardar'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowEditConfig(false)}
+                        disabled={savingEdit}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
+                    <div>
+                      <p className="text-sm text-dark-text-muted">Peso Inicial</p>
+                      <p className="text-2xl font-bold text-dark-text">
+                        {selectedEjercicio.pesoInicial} kg
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-dark-text-muted">Incremento</p>
+                      <p className="text-2xl font-bold text-dark-text">
+                        +{selectedEjercicio.incremento} kg
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-dark-text-muted">Último Peso</p>
+                      <p className="text-2xl font-bold text-dark-text">
+                        {historial.length > 0 && historial[0].repeticiones > 0
+                          ? `${historial[0].pesoActual} kg`
+                          : historial.length > 1
+                          ? `${historial[1].pesoActual} kg`
+                          : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-dark-text-muted">Próximo Peso</p>
+                      <p className="text-2xl font-bold text-blue-400">
+                        {getPesoSiguiente(selectedEjercicio)} kg
+                      </p>
+                    </div>
+                  </div>
+                )}
               </Card>
 
               <Card className="mb-6">
@@ -324,7 +468,10 @@ export const MetodoBilboPage = () => {
                   <div className="space-y-6">
                     {historialAgrupadoPorPeso().map((grupo) => {
                       const esPesoInicial = grupo.peso === selectedEjercicio.pesoInicial;
-                      const mejorReps = Math.max(...grupo.progresos.map(p => p.repeticiones));
+                      const progresosConReps = grupo.progresos.filter(p => p.repeticiones > 0);
+                      const mejorReps = progresosConReps.length > 0
+                        ? Math.max(...progresosConReps.map(p => p.repeticiones))
+                        : 0;
                       const primeraFecha = grupo.progresos[grupo.progresos.length - 1].fecha;
                       const ultimaFecha = grupo.progresos[0].fecha;
                       
@@ -352,35 +499,48 @@ export const MetodoBilboPage = () => {
                                 )}
                               </p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm text-dark-text-muted">Mejor</p>
-                              <p className="text-xl font-bold text-green-400">
-                                {mejorReps} reps
-                              </p>
-                            </div>
+                            {mejorReps > 0 && (
+                              <div className="text-right">
+                                <p className="text-sm text-dark-text-muted">Mejor</p>
+                                <p className="text-xl font-bold text-green-400">
+                                  {mejorReps} reps
+                                </p>
+                              </div>
+                            )}
                           </div>
                           
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-dark-text-muted mb-2">
+                            <div className="flex items-center gap-2 text-xs text-dark-text-muted mb-2 flex-wrap">
                               <span>Evolución:</span>
                               {grupo.progresos.map((progreso, idx) => {
-                                const esMejor = progreso.repeticiones === mejorReps;
+                                const esReinicio = progreso.repeticiones === 0;
+                                const esMejor = !esReinicio && progreso.repeticiones === mejorReps;
                                 const esUltimo = idx === 0;
-                                const mejoraAnterior = idx > 0 && progreso.repeticiones > grupo.progresos[idx - 1].repeticiones;
+                                const mejoraAnterior =
+                                  !esReinicio &&
+                                  idx > 0 &&
+                                  grupo.progresos[idx - 1].repeticiones > 0 &&
+                                  progreso.repeticiones > grupo.progresos[idx - 1].repeticiones;
                                 
                                 return (
                                   <div
                                     key={progreso.id}
                                     className={`flex items-center gap-1 px-2 py-1 rounded ${
-                                      esMejor
+                                      esReinicio
+                                        ? 'bg-amber-500/20 text-amber-400'
+                                        : esMejor
                                         ? 'bg-green-500/20 text-green-400 font-bold'
                                         : progreso.repeticiones < 15
                                         ? 'bg-red-500/20 text-red-400'
                                         : 'bg-dark-hover text-dark-text'
                                     }`}
-                                    title={`${formatFechaNumericaEs(progreso.fecha)}: ${progreso.repeticiones} reps`}
+                                    title={
+                                      esReinicio
+                                        ? `${formatFechaNumericaEs(progreso.fecha)}: Reinicio de ciclo`
+                                        : `${formatFechaNumericaEs(progreso.fecha)}: ${progreso.repeticiones} reps`
+                                    }
                                   >
-                                    <span>{progreso.repeticiones}</span>
+                                    <span>{esReinicio ? 'Reinicio' : progreso.repeticiones}</span>
                                     {mejoraAnterior && <span className="text-green-400">↑</span>}
                                     {esUltimo && <span className="text-xs ml-1">(último)</span>}
                                   </div>
@@ -393,27 +553,32 @@ export const MetodoBilboPage = () => {
                                 Ver detalles por fecha
                               </summary>
                               <div className="mt-2 space-y-2 pl-4 border-l-2 border-dark-border">
-                                {grupo.progresos.map((progreso) => (
-                                  <div
-                                    key={progreso.id}
-                                    className="flex justify-between items-center text-sm"
-                                  >
-                                    <span className="text-dark-text-muted">
-                                      {formatFechaNumericaEs(progreso.fecha)}
-                                    </span>
-                                    <span
-                                      className={`font-semibold ${
-                                        progreso.repeticiones < 15
-                                          ? 'text-red-400'
-                                          : progreso.repeticiones === mejorReps
-                                          ? 'text-green-400'
-                                          : 'text-dark-text'
-                                      }`}
+                                {grupo.progresos.map((progreso) => {
+                                  const esReinicio = progreso.repeticiones === 0;
+                                  return (
+                                    <div
+                                      key={progreso.id}
+                                      className="flex justify-between items-center text-sm"
                                     >
-                                      {progreso.repeticiones} reps
-                                    </span>
-                                  </div>
-                                ))}
+                                      <span className="text-dark-text-muted">
+                                        {formatFechaNumericaEs(progreso.fecha)}
+                                      </span>
+                                      <span
+                                        className={`font-semibold ${
+                                          esReinicio
+                                            ? 'text-amber-400'
+                                            : progreso.repeticiones < 15
+                                            ? 'text-red-400'
+                                            : progreso.repeticiones === mejorReps
+                                            ? 'text-green-400'
+                                            : 'text-dark-text'
+                                        }`}
+                                      >
+                                        {esReinicio ? 'Reinicio' : `${progreso.repeticiones} reps`}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </details>
                           </div>
@@ -445,9 +610,7 @@ export const MetodoBilboPage = () => {
                     const color = ejercicioInfo ? getMuscleColorWithDefault(ejercicioInfo.musculoPrincipal) : 'transparent';
                     
                     // Calcular próximo peso
-                    const proximoPeso = ultimoProgreso && ultimoProgreso.repeticiones >= 15
-                      ? ultimoProgreso.pesoActual + ejercicio.incremento
-                      : ejercicio.pesoInicial;
+                    const proximoPeso = calcularProximoPesoBilbo(ejercicio, ultimoProgreso ?? null) ?? ejercicio.pesoInicial;
                     
                     const repsAnteriores = ejercicio.repsProximoPeso;
                     

@@ -211,6 +211,32 @@ export const bilboService = {
     );
   },
 
+  /**
+   * Reinicia el ciclo Bilbo sin borrar historial.
+   * Inserta un registro con 0 reps en el último peso alcanzado (>=15),
+   * de modo que el próximo peso vuelva a ser el peso inicial.
+   */
+  async reiniciarCiclo(usuarioId: string, ejercicioId: string): Promise<string> {
+    const bilbo = await this.getByEjercicio(usuarioId, ejercicioId);
+    if (!bilbo) {
+      throw new Error('El ejercicio no está configurado para el método Bilbo');
+    }
+
+    const ultimoProgreso = await this.getUltimoProgreso(usuarioId, ejercicioId);
+    if (!ultimoProgreso || ultimoProgreso.repeticiones < 15) {
+      throw new Error('El próximo peso ya es el peso inicial; no hay nada que reiniciar');
+    }
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    return this.guardarProgresoHistorico(
+      usuarioId,
+      ejercicioId,
+      ultimoProgreso.pesoActual,
+      0,
+      hoy
+    );
+  },
+
   // Obtener historial de progreso de un ejercicio
   async getHistorialProgreso(usuarioId: string, ejercicioId: string): Promise<ProgresoMetodoBilbo[]> {
     const { data, error } = await supabase
