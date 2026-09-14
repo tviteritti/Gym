@@ -1,5 +1,4 @@
 import { supabase } from '../config/supabase';
-import { diaSemanaDesdeFechaIsoLocal } from '../utils/formatters';
 import type {
   StartTrainingDayRequest,
   RegisterExerciseExecutionRequest,
@@ -294,15 +293,13 @@ export const entrenamientoService = {
   },
 
   /**
-   * Última sesión por ejercicio: mismo día de calendario local que `diaSemana` (1–7),
-   * con fecha estrictamente anterior a `fechaAntesDe` (YYYY-MM-DD).
-   * No usa la columna `dia_semana` de la fila (puede estar mal si se guardó con UTC).
+   * Última sesión por ejercicio con fecha estrictamente anterior a `fechaAntesDe` (YYYY-MM-DD),
+   * sin filtrar por día de la semana.
    */
   async getUltimasSesionesMap(
     usuarioId: string,
     ejercicioIds: string[],
-    fechaAntesDe: string,
-    diaSemana: number
+    fechaAntesDe: string
   ): Promise<Record<string, UltimaSesionEjercicio | null>> {
     const unique = [...new Set(ejercicioIds)];
     const out: Record<string, UltimaSesionEjercicio | null> = {};
@@ -323,10 +320,7 @@ export const entrenamientoService = {
       throw new Error(`Error al obtener entrenamientos previos: ${entErr.message}`);
     }
 
-    const entFiltrados = (entrenamientos || []).filter(
-      (e) => diaSemanaDesdeFechaIsoLocal(e.fecha as string) === diaSemana
-    );
-    const entById = new Map(entFiltrados.map((e) => [e.id, e.fecha as string]));
+    const entById = new Map((entrenamientos || []).map((e) => [e.id, e.fecha as string]));
     const entIds = [...entById.keys()];
     if (entIds.length === 0) {
       return out;

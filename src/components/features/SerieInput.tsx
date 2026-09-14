@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NumberInput } from '../ui/NumberInput';
+import { parseDecimal, parseIntegerInput } from '../../utils/formatters';
 
 interface SerieInputProps {
   numeroSerie: number;
@@ -31,19 +32,18 @@ export const SerieInput = ({
 
   const handlePesoChange = (val: string) => {
     if (!userInteracted) setUserInteracted(true);
-    const nuevoPeso = val ? parseFloat(val) : undefined;
+    const nuevoPeso = val ? parseDecimal(val) : undefined;
     setPeso(nuevoPeso);
     onUpdate(nuevoPeso, reps);
   };
 
   const handleRepsChange = (val: string) => {
     if (!userInteracted) setUserInteracted(true);
-    const nuevasReps = val ? parseInt(val) : undefined;
+    const nuevasReps = val ? parseIntegerInput(val) : undefined;
     setReps(nuevasReps);
     onUpdate(peso, nuevasReps);
   };
 
-  // Resetear el estado de interacción cuando se deshabilita
   useEffect(() => {
     if (disabled) {
       setUserInteracted(false);
@@ -78,4 +78,3 @@ export const SerieInput = ({
     </div>
   );
 };
-

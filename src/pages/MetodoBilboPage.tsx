@@ -8,7 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { NumberInput } from '../components/ui/NumberInput';
 import { getMuscleColorWithDefault } from '../constants/muscleColors';
-import { formatFechaNumericaEs } from '../utils/formatters';
+import { formatFechaNumericaEs, parseDecimal, parseIntegerInput } from '../utils/formatters';
 import { calcularProximoPesoBilbo } from '../utils/bilbo';
 import type { EjercicioMetodoBilbo, ProgresoMetodoBilbo, Ejercicio } from '../types';
 
@@ -319,7 +319,7 @@ export const MetodoBilboPage = () => {
                       <NumberInput
                         label="Peso Inicial (kg) *"
                         value={editPesoInicial}
-                        onChange={(e) => setEditPesoInicial(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => setEditPesoInicial(parseDecimal(e.target.value) ?? 0)}
                         min={0}
                         step={0.5}
                         required
@@ -427,7 +427,7 @@ export const MetodoBilboPage = () => {
                       <NumberInput
                         label="Peso (kg) *"
                         value={pesoProgreso}
-                        onChange={(e) => setPesoProgreso(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => setPesoProgreso(parseDecimal(e.target.value) ?? 0)}
                         min={0}
                         step={0.5}
                         required
@@ -437,7 +437,7 @@ export const MetodoBilboPage = () => {
                       <NumberInput
                         label="Repeticiones *"
                         value={repsProgreso}
-                        onChange={(e) => setRepsProgreso(parseInt(e.target.value) || 0)}
+                        onChange={(e) => setRepsProgreso(parseIntegerInput(e.target.value) ?? 0)}
                         min={1}
                         step={1}
                         required

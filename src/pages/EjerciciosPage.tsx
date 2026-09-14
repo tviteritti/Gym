@@ -12,9 +12,11 @@ import {
 import { Layout } from '../components/layout/Layout';
 import { useAuthStore } from '../store/authStore';
 import { ejercicioService } from '../services/ejercicioService';
+import { entrenamientoService } from '../services/entrenamientoService';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import type { Ejercicio, HistorialEjercicio } from '../types';
+import { SerieInput } from '../components/features/SerieInput';
+import type { Ejercicio, HistorialEjercicio, SerieEjecutada } from '../types';
 import { calcularRM, formatFechaNumericaEs } from '../utils/formatters';
 import { getMuscleColorWithDefault } from '../constants/muscleColors';
 
@@ -32,6 +34,9 @@ export const EjerciciosPage = () => {
   const [loading, setLoading] = useState(true);
   const [textoBusqueda, setTextoBusqueda] = useState('');
   const [musculoFiltro, setMusculoFiltro] = useState('');
+  const [editingEntrenamientoId, setEditingEntrenamientoId] = useState<string | null>(null);
+  const [editSeries, setEditSeries] = useState<SerieEjecutada[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
   const navigate = useNavigate();
   const hasLoadedRef = useRef(false);
 
@@ -59,8 +64,58 @@ export const EjerciciosPage = () => {
     try {
       const historial = await ejercicioService.getHistorial(ejercicioId, usuario.id);
       setSelectedEjercicio(historial);
+      setEditingEntrenamientoId(null);
+      setEditSeries([]);
     } catch (error) {
       console.error('Error al cargar historial:', error);
+    }
+  };
+
+  const handleStartEdit = (entrenamientoId: string, series: SerieEjecutada[]) => {
+    setEditingEntrenamientoId(entrenamientoId);
+    setEditSeries(series.map((s) => ({ ...s })));
+  };
+
+  const handleCancelEdit = () => {
+    setEditingEntrenamientoId(null);
+    setEditSeries([]);
+  };
+
+  const handleSerieEditUpdate = (
+    numeroSerie: number,
+    peso: number | undefined,
+    reps: number | undefined
+  ) => {
+    setEditSeries((prev) =>
+      prev.map((s) =>
+        s.numeroSerie === numeroSerie
+          ? { ...s, pesoReal: peso, repeticiones: reps }
+          : s
+      )
+    );
+  };
+
+  const handleSaveEdit = async () => {
+    if (!usuario || !selectedEjercicio || !editingEntrenamientoId) return;
+
+    try {
+      setSavingEdit(true);
+      await entrenamientoService.registerExerciseExecution({
+        entrenamientoId: editingEntrenamientoId,
+        ejercicioId: selectedEjercicio.ejercicioId,
+        series: editSeries.map((s) => ({
+          numeroSerie: s.numeroSerie,
+          pesoReal: s.pesoReal,
+          repeticiones: s.repeticiones,
+        })),
+      });
+
+      await handleViewHistory(selectedEjercicio.ejercicioId);
+    } catch (error) {
+      console.error('Error al guardar registro:', error);
+      alert(error instanceof Error ? error.message : 'Error al guardar el registro');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -143,7 +198,14 @@ export const EjerciciosPage = () => {
 
           {selectedEjercicio ? (
             <div>
-              <Button variant="outline" onClick={() => setSelectedEjercicio(null)} className="mb-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSelectedEjercicio(null);
+                  handleCancelEdit();
+                }}
+                className="mb-4"
+              >
                 ← Volver
               </Button>
               <Card>
@@ -259,27 +321,89 @@ export const EjerciciosPage = () => {
 
                 <h3 className="text-xl font-bold mb-4 text-dark-text">Historial</h3>
                 <div className="space-y-4">
-                  {selectedEjercicio.ejecuciones.map((ejecucion, idx) => (
-                    <div key={`${ejecucion.fecha}-${idx}`} className="border-b border-dark-border pb-4">
-                      <p className="text-sm text-dark-text-muted mb-2">{formatFechaNumericaEs(ejecucion.fecha)}</p>
-                      <div className="space-y-2">
-                        {ejecucion.seriesEjecutadas.map((serie) => (
-                          <div key={serie.numeroSerie} className="flex gap-4 text-sm text-dark-text">
-                            <span className="font-semibold">Serie {serie.numeroSerie}:</span>
-                            {serie.pesoReal != null && serie.pesoReal > 0 && <span>{serie.pesoReal} kg</span>}
-                            {serie.repeticiones != null && serie.repeticiones > 0 && (
-                              <span>{serie.repeticiones} reps</span>
-                            )}
-                            {serie.pesoReal != null && serie.repeticiones != null && (
-                              <span className="text-dark-accent">
-                                RM: {calcularRM(serie.pesoReal, serie.repeticiones).toFixed(1)} kg
-                              </span>
-                            )}
+                  {selectedEjercicio.ejecuciones.map((ejecucion, idx) => {
+                    const isEditing = editingEntrenamientoId === ejecucion.entrenamientoId;
+                    return (
+                      <div
+                        key={`${ejecucion.entrenamientoId}-${idx}`}
+                        className="border-b border-dark-border pb-4"
+                      >
+                        <div className="flex justify-between items-center gap-2 mb-2">
+                          <p className="text-sm text-dark-text-muted">
+                            {formatFechaNumericaEs(ejecucion.fecha)}
+                          </p>
+                          {!isEditing && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleStartEdit(ejecucion.entrenamientoId, ejecucion.seriesEjecutadas)
+                              }
+                              disabled={savingEdit || editingEntrenamientoId !== null}
+                            >
+                              Editar
+                            </Button>
+                          )}
+                        </div>
+
+                        {isEditing ? (
+                          <div className="space-y-3">
+                            {editSeries.map((serie) => (
+                              <SerieInput
+                                key={`${ejecucion.entrenamientoId}-${serie.numeroSerie}`}
+                                numeroSerie={serie.numeroSerie}
+                                pesoInicial={serie.pesoReal}
+                                repsInicial={serie.repeticiones}
+                                onUpdate={(peso, reps) =>
+                                  handleSerieEditUpdate(serie.numeroSerie, peso, reps)
+                                }
+                                disabled={savingEdit}
+                              />
+                            ))}
+                            <div className="flex gap-2 pt-1">
+                              <Button
+                                size="sm"
+                                onClick={handleSaveEdit}
+                                disabled={savingEdit}
+                              >
+                                {savingEdit ? 'Guardando...' : 'Guardar'}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleCancelEdit}
+                                disabled={savingEdit}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
                           </div>
-                        ))}
+                        ) : (
+                          <div className="space-y-2">
+                            {ejecucion.seriesEjecutadas.map((serie) => (
+                              <div
+                                key={serie.numeroSerie}
+                                className="flex gap-4 text-sm text-dark-text"
+                              >
+                                <span className="font-semibold">Serie {serie.numeroSerie}:</span>
+                                {serie.pesoReal != null && serie.pesoReal > 0 && (
+                                  <span>{serie.pesoReal} kg</span>
+                                )}
+                                {serie.repeticiones != null && serie.repeticiones > 0 && (
+                                  <span>{serie.repeticiones} reps</span>
+                                )}
+                                {serie.pesoReal != null && serie.repeticiones != null && (
+                                  <span className="text-dark-accent">
+                                    RM: {calcularRM(serie.pesoReal, serie.repeticiones).toFixed(1)} kg
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card>
             </div>

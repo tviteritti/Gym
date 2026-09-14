@@ -1,5 +1,12 @@
 import { supabase } from '../config/supabase';
-import type { CreateRoutineRequest, Rutina, DiaDeRutina, EjercicioPlanificado, SeriePlanificada } from '../types';
+import type {
+  CreateRoutineRequest,
+  DiaRutinaRequest,
+  Rutina,
+  DiaDeRutina,
+  EjercicioPlanificado,
+  SeriePlanificada,
+} from '../types';
 
 const mapRutinaFromDB = (rutinaData: any): Rutina => {
   const nombresDias = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -46,6 +53,81 @@ const mapRutinaFromDB = (rutinaData: any): Rutina => {
   };
 };
 
+const rutinaToCreateRequest = (rutina: Rutina, usuarioId: string, nombre: string): CreateRoutineRequest => ({
+  usuarioId,
+  nombre,
+  dias: rutina.diasDeRutina.map((dia) => ({
+    diaSemana: dia.diaSemana,
+    ejercicios: dia.ejerciciosPlanificados.map((ejercicio) => ({
+      ejercicioId: ejercicio.ejercicioId,
+      orden: ejercicio.orden,
+      esBilbo: ejercicio.esBilbo,
+      tipoAgrupacion: ejercicio.tipoAgrupacion,
+      grupoAgrupacion: ejercicio.grupoAgrupacion,
+      series: ejercicio.seriesPlanificadas.map((serie) => ({
+        numeroSerie: serie.numeroSerie,
+      })),
+    })),
+  })),
+});
+
+async function insertDiasYEjercicios(rutinaId: string, dias: DiaRutinaRequest[]): Promise<void> {
+  for (const dia of dias) {
+    const { data: diaRutina, error: diaError } = await supabase
+      .from('dias_de_rutina')
+      .insert({
+        rutina_id: rutinaId,
+        dia_semana: dia.diaSemana,
+        ejercicio_bilbo_id: null,
+      })
+      .select('id')
+      .single();
+
+    if (diaError) {
+      throw new Error(`Error al crear día de rutina: ${diaError.message}`);
+    }
+
+    for (const ejercicio of dia.ejercicios) {
+      const { data: ejPlan, error: ejPlanError } = await supabase
+        .from('ejercicios_planificados')
+        .insert({
+          dia_de_rutina_id: diaRutina.id,
+          ejercicio_id: ejercicio.ejercicioId,
+          orden: ejercicio.orden,
+          es_bilbo: ejercicio.esBilbo || false,
+          tipo_agrupacion: ejercicio.tipoAgrupacion || null,
+          grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
+          rango_repeticiones_min: null,
+          rango_repeticiones_max: null,
+        })
+        .select('id')
+        .single();
+
+      if (ejPlanError) {
+        throw new Error(`Error al crear ejercicio planificado: ${ejPlanError.message}`);
+      }
+
+      if (ejercicio.series && ejercicio.series.length > 0) {
+        const series = ejercicio.series.map((serie) => ({
+          ejercicio_planificado_id: ejPlan.id,
+          numero_serie: serie.numeroSerie,
+          peso_planificado: null,
+          rango_repeticiones_min: null,
+          rango_repeticiones_max: null,
+        }));
+
+        const { error: seriesError } = await supabase
+          .from('series_planificadas')
+          .insert(series);
+
+        if (seriesError) {
+          throw new Error(`Error al crear series planificadas: ${seriesError.message}`);
+        }
+      }
+    }
+  }
+}
+
 export const rutinaService = {
   async create(data: CreateRoutineRequest): Promise<string> {
     // Primero desactivar todas las rutinas activas del usuario
@@ -70,63 +152,7 @@ export const rutinaService = {
       throw new Error(`Error al crear rutina: ${rutinaError.message}`);
     }
 
-      // Crear días de rutina y sus ejercicios
-    for (const dia of data.dias) {
-      const { data: diaRutina, error: diaError } = await supabase
-        .from('dias_de_rutina')
-        .insert({
-          rutina_id: rutina.id,
-          dia_semana: dia.diaSemana,
-          ejercicio_bilbo_id: null,
-        })
-        .select('id')
-        .single();
-
-      if (diaError) {
-        throw new Error(`Error al crear día de rutina: ${diaError.message}`);
-      }
-
-        // Crear ejercicios planificados para este día
-      for (const ejercicio of dia.ejercicios) {
-        const { data: ejPlan, error: ejPlanError } = await supabase
-          .from('ejercicios_planificados')
-          .insert({
-            dia_de_rutina_id: diaRutina.id,
-            ejercicio_id: ejercicio.ejercicioId,
-            orden: ejercicio.orden,
-            es_bilbo: ejercicio.esBilbo || false,
-            tipo_agrupacion: ejercicio.tipoAgrupacion || null,
-            grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
-            rango_repeticiones_min: null,
-            rango_repeticiones_max: null,
-          })
-          .select('id')
-          .single();
-
-        if (ejPlanError) {
-          throw new Error(`Error al crear ejercicio planificado: ${ejPlanError.message}`);
-        }
-
-        // Crear series planificadas
-        if (ejercicio.series && ejercicio.series.length > 0) {
-          const series = ejercicio.series.map((serie) => ({
-            ejercicio_planificado_id: ejPlan.id,
-            numero_serie: serie.numeroSerie,
-            peso_planificado: null,
-            rango_repeticiones_min: null,
-            rango_repeticiones_max: null,
-          }));
-
-          const { error: seriesError } = await supabase
-            .from('series_planificadas')
-            .insert(series);
-
-          if (seriesError) {
-            throw new Error(`Error al crear series planificadas: ${seriesError.message}`);
-          }
-        }
-      }
-    }
+    await insertDiasYEjercicios(rutina.id, data.dias);
 
     return rutina.id;
   },
@@ -269,6 +295,36 @@ export const rutinaService = {
     return true;
   },
 
+  async duplicate(rutinaId: string, usuarioId: string): Promise<string> {
+    const rutinas = await this.getAll(usuarioId);
+    const source = rutinas.find((r) => r.id === rutinaId);
+
+    if (!source) {
+      throw new Error('Rutina no encontrada');
+    }
+
+    const request = rutinaToCreateRequest(source, usuarioId, `${source.nombre} (copia)`);
+
+    // No desactiva la rutina activa: la copia queda inactiva
+    const { data: rutina, error: rutinaError } = await supabase
+      .from('rutinas')
+      .insert({
+        nombre: request.nombre,
+        usuario_id: usuarioId,
+        activa: false,
+      })
+      .select('id')
+      .single();
+
+    if (rutinaError) {
+      throw new Error(`Error al duplicar rutina: ${rutinaError.message}`);
+    }
+
+    await insertDiasYEjercicios(rutina.id, request.dias);
+
+    return rutina.id;
+  },
+
   async update(rutinaId: string, data: CreateRoutineRequest): Promise<string> {
     // Actualizar nombre de la rutina
     const { error: rutinaError } = await supabase
@@ -291,63 +347,8 @@ export const rutinaService = {
       throw new Error(`Error al eliminar días de rutina: ${deleteError.message}`);
     }
 
-    // Crear los nuevos días de rutina (igual que en create)
-    for (const dia of data.dias) {
-      const { data: diaRutina, error: diaError } = await supabase
-        .from('dias_de_rutina')
-        .insert({
-          rutina_id: rutinaId,
-          dia_semana: dia.diaSemana,
-          ejercicio_bilbo_id: null,
-        })
-        .select('id')
-        .single();
-
-      if (diaError) {
-        throw new Error(`Error al crear día de rutina: ${diaError.message}`);
-      }
-
-      for (const ejercicio of dia.ejercicios) {
-        const { data: ejPlan, error: ejPlanError } = await supabase
-          .from('ejercicios_planificados')
-          .insert({
-            dia_de_rutina_id: diaRutina.id,
-            ejercicio_id: ejercicio.ejercicioId,
-            orden: ejercicio.orden,
-            es_bilbo: ejercicio.esBilbo || false,
-            tipo_agrupacion: ejercicio.tipoAgrupacion || null,
-            grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
-            rango_repeticiones_min: null,
-            rango_repeticiones_max: null,
-          })
-          .select('id')
-          .single();
-
-        if (ejPlanError) {
-          throw new Error(`Error al crear ejercicio planificado: ${ejPlanError.message}`);
-        }
-
-        if (ejercicio.series && ejercicio.series.length > 0) {
-          const series = ejercicio.series.map((serie) => ({
-            ejercicio_planificado_id: ejPlan.id,
-            numero_serie: serie.numeroSerie,
-            peso_planificado: null,
-            rango_repeticiones_min: null,
-            rango_repeticiones_max: null,
-          }));
-
-          const { error: seriesError } = await supabase
-            .from('series_planificadas')
-            .insert(series);
-
-          if (seriesError) {
-            throw new Error(`Error al crear series planificadas: ${seriesError.message}`);
-          }
-        }
-      }
-    }
+    await insertDiasYEjercicios(rutinaId, data.dias);
 
     return rutinaId;
   },
 };
-

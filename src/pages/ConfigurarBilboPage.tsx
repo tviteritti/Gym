@@ -7,6 +7,7 @@ import { ejercicioService } from '../services/ejercicioService';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { NumberInput } from '../components/ui/NumberInput';
+import { parseDecimal } from '../utils/formatters';
 import type { Ejercicio, EjercicioMetodoBilbo } from '../types';
 
 export const ConfigurarBilboPage = () => {
@@ -199,7 +200,7 @@ export const ConfigurarBilboPage = () => {
                 <NumberInput
                   label="Peso Inicial (kg) *"
                   value={pesoInicial}
-                  onChange={(e) => setPesoInicial(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setPesoInicial(parseDecimal(e.target.value) ?? 0)}
                   min={0}
                   step={0.5}
                   required
@@ -257,7 +258,7 @@ export const ConfigurarBilboPage = () => {
                           <NumberInput
                             label="Peso Inicial (kg) *"
                             value={editPesoInicial}
-                            onChange={(e) => setEditPesoInicial(parseFloat(e.target.value) || 0)}
+                            onChange={(e) => setEditPesoInicial(parseDecimal(e.target.value) ?? 0)}
                             min={0}
                             step={0.5}
                             required

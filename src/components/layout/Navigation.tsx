@@ -9,18 +9,56 @@ const navItems = [
   { path: '/musculos', label: 'Músculos', icon: '🔬' },
 ];
 
-export const Navigation = () => {
+interface NavigationProps {
+  open: boolean;
+  onToggle: () => void;
+}
+
+export const Navigation = ({ open, onToggle }: NavigationProps) => {
   const location = useLocation();
   const { logout, usuario } = useAuthStore();
 
   return (
     <>
+      {/* Desktop: botón para abrir cuando el menú está cerrado */}
+      {!open && (
+        <button
+          type="button"
+          onClick={onToggle}
+          title="Abrir menú"
+          aria-label="Abrir menú"
+          className="hidden md:flex fixed left-3 top-3 z-50 h-10 w-10 items-center justify-center rounded-xl border border-dark-border/50 bg-dark-surface/90 text-dark-text shadow-lg backdrop-blur-sm hover:border-blue-500/40 hover:text-white transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
+
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-full w-72 glass-morphism border-r border-dark-border/50 flex-col z-50 animate-slide-in-up">
+      <aside
+        className={`hidden md:flex fixed left-0 top-0 h-full w-72 glass-morphism border-r border-dark-border/50 flex-col z-50 transition-transform duration-300 ease-smooth ${
+          open ? 'translate-x-0' : '-translate-x-full pointer-events-none'
+        }`}
+        aria-hidden={!open}
+      >
         <div className="p-8 border-b border-dark-border/50">
-          <h1 className="text-3xl font-bold gradient-text mb-4 animate-float">
-            Gym Tracker
-          </h1>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <h1 className="text-3xl font-bold gradient-text animate-float">
+              Gym Tracker
+            </h1>
+            <button
+              type="button"
+              onClick={onToggle}
+              title="Cerrar menú"
+              aria-label="Cerrar menú"
+              className="mt-1 flex-shrink-0 h-9 w-9 flex items-center justify-center rounded-lg border border-dark-border/50 text-dark-text-muted hover:text-dark-text hover:border-blue-500/40 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
           {usuario && (
             <div className="glass-morphism rounded-xl px-4 py-2 border border-dark-border/50">
               <p className="text-sm text-dark-text-muted truncate">{usuario.email}</p>
@@ -29,12 +67,13 @@ export const Navigation = () => {
         </div>
         <nav className="flex-1 p-6 space-y-3">
           {navItems.map((item, index) => {
-            const isActive = location.pathname === item.path || 
+            const isActive = location.pathname === item.path ||
                            (item.path !== '/home' && location.pathname.startsWith(item.path));
             return (
               <Link
                 key={item.path}
                 to={item.path}
+                tabIndex={open ? 0 : -1}
                 className={`
                   group relative flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-400 ease-smooth overflow-hidden
                   ${isActive
@@ -57,6 +96,7 @@ export const Navigation = () => {
         <div className="p-6 border-t border-dark-border/50">
           <button
             onClick={logout}
+            tabIndex={open ? 0 : -1}
             className="group w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-dark-text-muted hover:text-red-400 transition-all duration-400 ease-smooth border border-transparent hover:border-red-500/30 hover:bg-red-600/10 hover:scale-[1.02]"
           >
             <span className="text-2xl transition-transform duration-300 group-hover:scale-110">🚪</span>
@@ -69,7 +109,7 @@ export const Navigation = () => {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 glass-morphism border-t border-dark-border/50 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex justify-around items-center h-20 pt-2">
           {navItems.map((item, index) => {
-            const isActive = location.pathname === item.path || 
+            const isActive = location.pathname === item.path ||
                            (item.path !== '/home' && location.pathname.startsWith(item.path));
             return (
               <Link

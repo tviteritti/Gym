@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { NumberInput } from '../ui/NumberInput';
 import { SerieInput } from './SerieInput';
 import type {
   EjercicioPlanificado,
@@ -15,7 +16,7 @@ import { bilboService } from '../../services/bilboService';
 import { entrenamientoService } from '../../services/entrenamientoService';
 import { getMuscleColorWithDefault } from '../../constants/muscleColors';
 import { calcularProximoPesoBilbo } from '../../utils/bilbo';
-import { formatDiaSemana, formatFechaCortaEs } from '../../utils/formatters';
+import { formatFechaCortaEs, parseDecimal } from '../../utils/formatters';
 
 interface EjercicioCardProps {
   ejercicio: EjercicioPlanificado;
@@ -31,8 +32,6 @@ interface EjercicioCardProps {
   esBilboEnRutina?: boolean;
   /** null: Home cargando; mapa listo con null si no hay historial previo a la fecha del día */
   ultimaSesionPorEjercicioId?: Record<string, UltimaSesionEjercicio | null> | null;
-  /** Día de rutina (1–7) para la última sesión del mismo día de la semana */
-  diaSemanaRutina: number;
 }
 
 export const EjercicioCard = ({
@@ -47,7 +46,6 @@ export const EjercicioCard = ({
   esEjercicioAdicional = false,
   esBilboEnRutina = false,
   ultimaSesionPorEjercicioId,
-  diaSemanaRutina,
 }: EjercicioCardProps) => {
   const [series, setSeries] = useState<SerieEjecutada[]>([]);
   const [isSaved, setIsSaved] = useState(false);
@@ -68,6 +66,7 @@ export const EjercicioCard = ({
   const [maxRepsPesoDia, setMaxRepsPesoDia] = useState<{ peso: number; reps: number } | null>(null);
   const [maxRepsPanelAbierto, setMaxRepsPanelAbierto] = useState(false);
   const [maxRepsCargando, setMaxRepsCargando] = useState(false);
+  const [pesoConsultaRecord, setPesoConsultaRecord] = useState<number>(0);
 
   const [ultimaSesionExtra, setUltimaSesionExtra] = useState<UltimaSesionEjercicio | null | undefined>(undefined);
   const ultimaSesionExtraFetchIdRef = useRef<string | null>(null);
@@ -91,6 +90,17 @@ export const EjercicioCard = ({
   const resumenUltima =
     resumenUltimaDesdeHome !== undefined ? resumenUltimaDesdeHome : ultimaSesionExtra;
 
+  const pesoDefaultConsulta = useMemo(() => {
+    if (esBilboDelDia && pesoObjetivoBilbo !== null) return pesoObjetivoBilbo;
+    if (resumenUltima?.series?.length) {
+      const s1 = resumenUltima.series.find((s) => s.numeroSerie === 1 && s.pesoReal != null);
+      if (s1?.pesoReal != null) return s1.pesoReal;
+      const conPeso = resumenUltima.series.find((s) => s.pesoReal != null);
+      if (conPeso?.pesoReal != null) return conPeso.pesoReal;
+    }
+    return undefined;
+  }, [esBilboDelDia, pesoObjetivoBilbo, resumenUltima]);
+
   useEffect(() => {
     setUltimaSesionExtra(undefined);
     ultimaSesionExtraFetchIdRef.current = null;
@@ -98,7 +108,8 @@ export const EjercicioCard = ({
     setRecordPersonal(null);
     setMaxRepsPanelAbierto(false);
     setMaxRepsPesoDia(null);
-  }, [ejercicioSeleccionadoId, fecha, diaSemanaRutina]);
+    setPesoConsultaRecord(0);
+  }, [ejercicioSeleccionadoId, fecha]);
 
   useEffect(() => {
     if (ultimaSesionPorEjercicioId === null || ultimaSesionPorEjercicioId === undefined) {
@@ -118,8 +129,7 @@ export const EjercicioCard = ({
         const map = await entrenamientoService.getUltimasSesionesMap(
           usuarioId,
           [ejercicioSeleccionadoId],
-          fecha,
-          diaSemanaRutina
+          fecha
         );
         if (cancelled) return;
         setUltimaSesionExtra(map[ejercicioSeleccionadoId] ?? null);
@@ -131,7 +141,7 @@ export const EjercicioCard = ({
     return () => {
       cancelled = true;
     };
-  }, [usuarioId, ejercicioSeleccionadoId, fecha, diaSemanaRutina, ultimaSesionPorEjercicioId]);
+  }, [usuarioId, ejercicioSeleccionadoId, fecha, ultimaSesionPorEjercicioId]);
 
   const cargarRecordPersonalDebajo = useCallback(async () => {
     setRecordCargando(true);
@@ -155,28 +165,36 @@ export const EjercicioCard = ({
     }
   };
 
-  const cargarMaxRepsEnPesoDelDia = useCallback(async () => {
-    if (pesoObjetivoBilbo === null) return;
-    setMaxRepsCargando(true);
-    try {
-      const r = await entrenamientoService.getMaxRepsEnPesoExacto(
-        usuarioId,
-        ejercicioSeleccionadoId,
-        pesoObjetivoBilbo
-      );
-      setMaxRepsPesoDia(r);
-    } catch (e) {
-      console.error('Max reps peso del día:', e);
-      setMaxRepsPesoDia(null);
-    } finally {
-      setMaxRepsCargando(false);
-    }
-  }, [usuarioId, ejercicioSeleccionadoId, pesoObjetivoBilbo]);
+  const cargarMaxRepsEnPeso = useCallback(
+    async (peso: number) => {
+      if (!(peso > 0)) {
+        setMaxRepsPesoDia(null);
+        return;
+      }
+      setMaxRepsCargando(true);
+      try {
+        const r = await entrenamientoService.getMaxRepsEnPesoExacto(
+          usuarioId,
+          ejercicioSeleccionadoId,
+          peso
+        );
+        setMaxRepsPesoDia(r);
+      } catch (e) {
+        console.error('Max reps peso:', e);
+        setMaxRepsPesoDia(null);
+      } finally {
+        setMaxRepsCargando(false);
+      }
+    },
+    [usuarioId, ejercicioSeleccionadoId]
+  );
 
   const toggleMaxRepsPanel = () => {
     if (!maxRepsPanelAbierto) {
+      const inicial = pesoDefaultConsulta ?? 0;
+      setPesoConsultaRecord(inicial);
       setMaxRepsPanelAbierto(true);
-      void cargarMaxRepsEnPesoDelDia();
+      void cargarMaxRepsEnPeso(inicial);
     } else {
       setMaxRepsPanelAbierto(false);
     }
@@ -395,23 +413,21 @@ export const EjercicioCard = ({
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
             </button>
-            {esBilboDelDia && ejercicioBilbo && pesoObjetivoBilbo !== null && (
-              <button
-                type="button"
-                title="Ver tus mejores repeticiones con el peso de hoy"
-                onClick={toggleMaxRepsPanel}
-                className="mt-1 flex-shrink-0 w-9 h-9 rounded-lg border border-emerald-500/50 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 flex items-center justify-center transition-colors"
-                disabled={loading}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M8 21h8m-4-4v4M7 4h10v5a5 5 0 01-10 0V4zM7 4H5a2 2 0 100 4h2m10-4h2a2 2 0 110 4h-2"
-                  />
-                </svg>
-              </button>
-            )}
+            <button
+              type="button"
+              title="Ver mejores repeticiones a un peso"
+              onClick={toggleMaxRepsPanel}
+              className="mt-1 flex-shrink-0 w-9 h-9 rounded-lg border border-emerald-500/50 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 flex items-center justify-center transition-colors"
+              disabled={loading}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 21h8m-4-4v4M7 4h10v5a5 5 0 01-10 0V4zM7 4H5a2 2 0 100 4h2m10-4h2a2 2 0 110 4h-2"
+                />
+              </svg>
+            </button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm text-dark-text-muted">Orden: {ejercicio.orden}</p>
@@ -474,8 +490,28 @@ export const EjercicioCard = ({
         </div>
       )}
 
-      {maxRepsPanelAbierto && esBilboDelDia && ejercicioBilbo && (
-        <div className="mb-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+      {maxRepsPanelAbierto && (
+        <div className="mb-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg space-y-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-28">
+              <NumberInput
+                label="Peso (kg)"
+                value={pesoConsultaRecord || ''}
+                onChange={(e) => setPesoConsultaRecord(parseDecimal(e.target.value) ?? 0)}
+                step={0.5}
+                min={0}
+                fullWidth
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void cargarMaxRepsEnPeso(pesoConsultaRecord)}
+              disabled={maxRepsCargando || !(pesoConsultaRecord > 0)}
+            >
+              Consultar
+            </Button>
+          </div>
           {maxRepsCargando ? (
             <p className="text-sm text-emerald-200/80">Cargando…</p>
           ) : maxRepsPesoDia ? (
@@ -483,15 +519,17 @@ export const EjercicioCard = ({
               Mejor registro a <span className="font-semibold">{maxRepsPesoDia.peso} kg</span>:{' '}
               <span className="font-bold text-emerald-200">{maxRepsPesoDia.reps} reps</span>
             </p>
-          ) : (
+          ) : pesoConsultaRecord > 0 ? (
             <p className="text-sm text-emerald-200/80">No hay series previas con ese peso exacto.</p>
+          ) : (
+            <p className="text-sm text-emerald-200/80">Ingresá un peso para consultar.</p>
           )}
         </div>
       )}
 
       <div className="mb-4 rounded-lg border border-dark-border/60 bg-dark-surface/40 px-3 py-2.5">
         <p className="text-xs font-semibold text-dark-text-muted uppercase tracking-wide mb-1.5">
-          Última vez en {formatDiaSemana(diaSemanaRutina)} (antes de esta fecha)
+          Última vez
         </p>
         {ultimaSesionPorEjercicioId === null ? (
           <p className="text-sm text-dark-text-muted">Cargando historial…</p>
@@ -499,7 +537,7 @@ export const EjercicioCard = ({
           <p className="text-sm text-dark-text-muted">Cargando…</p>
         ) : resumenUltima === null || resumenUltima.series.length === 0 ? (
           <p className="text-sm text-dark-text-muted">
-            Sin entrenamientos previos en {formatDiaSemana(diaSemanaRutina)} para este ejercicio.
+            Sin entrenamientos previos para este ejercicio.
           </p>
         ) : (
           <>

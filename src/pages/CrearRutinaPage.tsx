@@ -7,6 +7,7 @@ import { ejercicioService } from "../services/ejercicioService"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { Card } from "../components/ui/Card"
+import { LoadingOverlay } from "../components/ui/LoadingOverlay"
 import { RutinaEditorSidePanel } from "../components/features/RutinaEditorSidePanel"
 import { ExerciseSelect } from "../components/features/ExerciseSelect"
 import { getMuscleColorWithDefault } from "../constants/muscleColors"
@@ -14,6 +15,7 @@ import {
   seriesDesdeCantidad,
   setDragDataEjercicioRutina,
   getDragDataEjercicioRutina,
+  ordenarDiasPorSemana,
 } from "../utils/rutinaSeries"
 import { contarSeriesDiaRutina } from "../utils/rutinaVolumen"
 import type { Ejercicio, DiaRutinaRequest, EjercicioRutinaRequest } from "../types"
@@ -56,7 +58,7 @@ export const CrearRutinaPage = () => {
   ]
 
   const agregarDia = () => {
-    setDias([...dias, { diaSemana: 1, ejercicios: [] }])
+    setDias(ordenarDiasPorSemana([...dias, { diaSemana: 1, ejercicios: [] }]))
   }
 
   const eliminarDia = (index: number) => {
@@ -64,9 +66,8 @@ export const CrearRutinaPage = () => {
   }
 
   const actualizarDia = (index: number, diaSemana: number) => {
-    const nuevosDias = [...dias]
-    nuevosDias[index].diaSemana = diaSemana
-    setDias(nuevosDias)
+    const nuevosDias = dias.map((d, i) => (i === index ? { ...d, diaSemana } : d))
+    setDias(ordenarDiasPorSemana(nuevosDias))
   }
 
   const agregarEjercicioADia = (diaIndex: number) => {
@@ -159,13 +160,14 @@ export const CrearRutinaPage = () => {
 
   return (
     <Layout>
+      {loading && <LoadingOverlay message="Creando rutina…" />}
       <div className="min-h-screen bg-dark-bg p-4 md:p-8">
         <div className="mx-auto max-w-7xl">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
               Crear Rutina
             </h1>
-            <Button variant="outline" onClick={() => navigate("/rutinas")}>
+            <Button variant="outline" onClick={() => navigate("/rutinas")} disabled={loading}>
               Cancelar
             </Button>
           </div>

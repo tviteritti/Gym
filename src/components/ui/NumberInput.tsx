@@ -1,5 +1,6 @@
 import type { InputHTMLAttributes } from 'react';
-import { forwardRef, useCallback } from 'react';
+import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import { sanitizeDecimalInput } from '../../utils/formatters';
 
 interface NumberInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string;
@@ -10,16 +11,74 @@ interface NumberInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
   max?: number;
 }
 
-export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ label, error, fullWidth = false, className = '', step, min, max, onFocus, ...props }, ref) => {
+const valueToText = (value: InputHTMLAttributes<HTMLInputElement>['value']): string => {
+  if (value === undefined || value === null || value === '') return '';
+  return String(value);
+};
 
-    const handleFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
-      const scrollY = window.scrollY;
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: scrollY, behavior: 'instant' });
-      });
-      onFocus?.(e);
-    }, [onFocus]);
+export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
+  (
+    {
+      label,
+      error,
+      fullWidth = false,
+      className = '',
+      step,
+      min,
+      max,
+      value,
+      onChange,
+      onFocus,
+      onBlur,
+      ...props
+    },
+    ref
+  ) => {
+    const [text, setText] = useState(() => valueToText(value));
+    const focusedRef = useRef(false);
+
+    useEffect(() => {
+      if (!focusedRef.current) {
+        setText(valueToText(value));
+      }
+    }, [value]);
+
+    const handleFocus = useCallback(
+      (e: React.FocusEvent<HTMLInputElement>) => {
+        focusedRef.current = true;
+        const scrollY = window.scrollY;
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY, behavior: 'instant' });
+        });
+        onFocus?.(e);
+      },
+      [onFocus]
+    );
+
+    const handleBlur = useCallback(
+      (e: React.FocusEvent<HTMLInputElement>) => {
+        focusedRef.current = false;
+        setText(valueToText(value));
+        onBlur?.(e);
+      },
+      [onBlur, value]
+    );
+
+    const handleChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        const sanitized = sanitizeDecimalInput(e.target.value);
+        setText(sanitized);
+        const normalized = sanitized.replace(',', '.');
+        if (!onChange) return;
+        const nextEvent = {
+          ...e,
+          target: { ...e.target, value: normalized },
+          currentTarget: { ...e.currentTarget, value: normalized },
+        } as React.ChangeEvent<HTMLInputElement>;
+        onChange(nextEvent);
+      },
+      [onChange]
+    );
 
     return (
       <div className={fullWidth ? 'w-full' : ''}>
@@ -30,12 +89,18 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
         )}
         <input
           ref={ref}
-          type="number"
-          inputMode="decimal"
           step={step}
           min={min}
           max={max}
+          {...props}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          enterKeyHint="done"
+          value={text}
+          onChange={handleChange}
           onFocus={handleFocus}
+          onBlur={handleBlur}
           className={`
             block px-2 sm:px-4 py-2 sm:py-3 text-sm sm:text-lg text-center
             bg-white border rounded-lg text-black
@@ -46,7 +111,6 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
             ${error ? 'border-red-500' : 'border-dark-border'}
             ${className}
           `}
-          {...props}
         />
         {error && (
           <p className="mt-1 text-sm text-red-600">{error}</p>
@@ -57,4 +121,3 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
 );
 
 NumberInput.displayName = 'NumberInput';
-

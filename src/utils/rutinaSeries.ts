@@ -31,3 +31,11 @@ export function seriesDesdeCantidad(cantidad: number): SerieRutinaRequest[] {
     numeroSerie: i + 1,
   }));
 }
+
+/** Ordena bloques de día: Lunes → Domingo (1–7). Empates mantienen orden relativo. */
+export function ordenarDiasPorSemana<T extends { diaSemana: number }>(dias: T[]): T[] {
+  return dias
+    .map((dia, index) => ({ dia, index }))
+    .sort((a, b) => a.dia.diaSemana - b.dia.diaSemana || a.index - b.index)
+    .map(({ dia }) => dia);
+}

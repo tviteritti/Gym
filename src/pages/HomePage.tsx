@@ -139,8 +139,7 @@ export const HomePage = () => {
         const map = await entrenamientoService.getUltimasSesionesMap(
           usuario.id,
           allIds,
-          fechaSel,
-          selectedDay
+          fechaSel
         );
         if (cancelled) return;
         setUltimaSesionMap(map);
@@ -444,7 +443,6 @@ export const HomePage = () => {
                                   esEjercicioAdicional={esAdicional || esNuevo}
                                   esBilboEnRutina={!!ejercicio.esBilbo}
                                   ultimaSesionPorEjercicioId={ultimaSesionMap}
-                                  diaSemanaRutina={selectedDay}
                                   onDelete={
                                     esNuevo
                                       ? () => handleEliminarEjercicioNuevo(ejercicio.id)
@@ -492,7 +490,6 @@ export const HomePage = () => {
                             esEjercicioAdicional={esAdicional || esNuevo}
                             esBilboEnRutina={!!ejercicio.esBilbo}
                             ultimaSesionPorEjercicioId={ultimaSesionMap}
-                            diaSemanaRutina={selectedDay}
                             onDelete={
                               esNuevo
                                 ? () => handleEliminarEjercicioNuevo(ejercicio.id)

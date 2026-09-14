@@ -6,9 +6,18 @@ import { rutinaService } from "../services/rutinaService"
 import { ejercicioService } from "../services/ejercicioService"
 import { Button } from "../components/ui/Button"
 import { Card } from "../components/ui/Card"
+import { LoadingOverlay } from "../components/ui/LoadingOverlay"
 import type { Rutina, Ejercicio } from "../types"
 import { getMuscleColorWithDefault } from "../constants/muscleColors"
 import { calcularResumenSeriesRutina } from "../utils/rutinaVolumen"
+
+type RutinaAction = "duplicate" | "activate" | "delete"
+
+const actionMessages: Record<RutinaAction, string> = {
+  duplicate: "Duplicando rutina…",
+  activate: "Activando rutina…",
+  delete: "Eliminando rutina…",
+}
 
 export const RutinasPage = () => {
   const { usuario } = useAuthStore()
@@ -16,6 +25,10 @@ export const RutinasPage = () => {
   const [ejercicios, setEjercicios] = useState<Ejercicio[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedRutinaId, setExpandedRutinaId] = useState<string | null>(null)
+  const [actionBusy, setActionBusy] = useState<{
+    type: RutinaAction
+    rutinaId: string
+  } | null>(null)
   const navigate = useNavigate()
   const loadedUsuarioIdRef = useRef<string | null>(null)
 
@@ -28,16 +41,16 @@ export const RutinasPage = () => {
     }
   }, [])
 
-  const loadRutinas = useCallback(async () => {
+  const loadRutinas = useCallback(async (opts?: { silent?: boolean }) => {
     if (!usuario) return
     try {
-      setLoading(true)
+      if (!opts?.silent) setLoading(true)
       const data = await rutinaService.getAll(usuario.id)
       setRutinas(data)
     } catch (error) {
       console.error("Error al cargar rutinas:", error)
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [usuario])
 
@@ -56,17 +69,21 @@ export const RutinasPage = () => {
   }, [usuario, navigate, loadRutinas, loadEjercicios])
 
   const handleActivate = async (rutinaId: string) => {
-    if (!usuario) return
+    if (!usuario || actionBusy) return
+    setActionBusy({ type: "activate", rutinaId })
     try {
       await rutinaService.activate(rutinaId, usuario.id)
-      await loadRutinas()
+      await loadRutinas({ silent: true })
     } catch (error) {
       console.error("Error al activar rutina:", error)
+      alert(error instanceof Error ? error.message : "Error al activar la rutina")
+    } finally {
+      setActionBusy(null)
     }
   }
 
   const handleDelete = async (rutinaId: string, rutinaNombre: string) => {
-    if (!usuario) return
+    if (!usuario || actionBusy) return
     
     const confirmed = window.confirm(
       `¿Estás seguro de que quieres eliminar la rutina "${rutinaNombre}"?\n\nEsta acción no se puede deshacer.`
@@ -74,12 +91,29 @@ export const RutinasPage = () => {
     
     if (!confirmed) return
     
+    setActionBusy({ type: "delete", rutinaId })
     try {
       await rutinaService.delete(rutinaId, usuario.id)
-      await loadRutinas()
+      await loadRutinas({ silent: true })
     } catch (error) {
       console.error("Error al eliminar rutina:", error)
       alert(error instanceof Error ? error.message : "Error al eliminar la rutina")
+    } finally {
+      setActionBusy(null)
+    }
+  }
+
+  const handleDuplicate = async (rutinaId: string) => {
+    if (!usuario || actionBusy) return
+    setActionBusy({ type: "duplicate", rutinaId })
+    try {
+      await rutinaService.duplicate(rutinaId, usuario.id)
+      await loadRutinas({ silent: true })
+    } catch (error) {
+      console.error("Error al duplicar rutina:", error)
+      alert(error instanceof Error ? error.message : "Error al duplicar la rutina")
+    } finally {
+      setActionBusy(null)
     }
   }
 
@@ -93,8 +127,11 @@ export const RutinasPage = () => {
     )
   }
 
+  const busy = actionBusy !== null
+
   return (
     <Layout>
+      {actionBusy && <LoadingOverlay message={actionMessages[actionBusy.type]} />}
       <div className="min-h-screen bg-dark-bg p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           <div className="flex justify-between items-center mb-6">
@@ -107,6 +144,7 @@ export const RutinasPage = () => {
               onClick={() => navigate("/rutinas/crear")}
               size="lg"
               fullWidth
+              disabled={busy}
             >
               Crear Nueva Rutina
             </Button>
@@ -123,6 +161,7 @@ export const RutinasPage = () => {
               {rutinas.map((rutina) => {
                 const isExpanded = expandedRutinaId === rutina.id
                 const resumenSeries = calcularResumenSeriesRutina(rutina, ejercicios)
+                const isThisBusy = actionBusy?.rutinaId === rutina.id
                 return (
                   <Card key={rutina.id}>
                     <div className="flex justify-between items-start">
@@ -145,6 +184,7 @@ export const RutinasPage = () => {
                          <Button
                            variant="outline"
                            size="sm"
+                           disabled={busy}
                            onClick={() => setExpandedRutinaId(isExpanded ? null : rutina.id)}
                          >
                            {isExpanded ? "Ocultar" : "Ver Detalle"}
@@ -152,25 +192,42 @@ export const RutinasPage = () => {
                          <Button
                            variant="outline"
                            size="sm"
+                           disabled={busy}
                            onClick={() => navigate(`/rutinas/${rutina.id}/editar`)}
                          >
                            Editar
+                         </Button>
+                         <Button
+                           variant="outline"
+                           size="sm"
+                           disabled={busy}
+                           onClick={() => handleDuplicate(rutina.id)}
+                         >
+                           {isThisBusy && actionBusy?.type === "duplicate"
+                             ? "Duplicando…"
+                             : "Duplicar"}
                          </Button>
                          {!rutina.activa && (
                            <>
                              <Button
                                variant="primary"
                                size="sm"
+                               disabled={busy}
                                onClick={() => handleActivate(rutina.id)}
                              >
-                               Activar
+                               {isThisBusy && actionBusy?.type === "activate"
+                                 ? "Activando…"
+                                 : "Activar"}
                              </Button>
                              <Button
                                variant="danger"
                                size="sm"
+                               disabled={busy}
                                onClick={() => handleDelete(rutina.id, rutina.nombre)}
                              >
-                               Eliminar
+                               {isThisBusy && actionBusy?.type === "delete"
+                                 ? "Eliminando…"
+                                 : "Eliminar"}
                              </Button>
                            </>
                          )}

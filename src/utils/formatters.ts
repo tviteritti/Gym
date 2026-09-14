@@ -97,6 +97,46 @@ export const calcularRM = (peso: number, reps: number): number => {
   return peso * (1 + reps / 30);
 };
 
+/** Permite dígitos y un solo separador decimal (`,` o `.`). */
+export const sanitizeDecimalInput = (raw: string): string => {
+  const cleaned = raw.replace(/[^\d.,]/g, '');
+  const sepIndex = cleaned.search(/[.,]/);
+  if (sepIndex === -1) return cleaned;
+  return cleaned.slice(0, sepIndex + 1) + cleaned.slice(sepIndex + 1).replace(/[.,]/g, '');
+};
+
+/**
+ * Parsea decimales aceptando `50.5` o `50,5`.
+ * Vacío o inválido → `undefined`.
+ */
+export const parseDecimal = (raw: string): number | undefined => {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  let normalized = trimmed;
+  if (normalized.includes(',') && normalized.includes('.')) {
+    const lastComma = normalized.lastIndexOf(',');
+    const lastDot = normalized.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else {
+    normalized = normalized.replace(',', '.');
+  }
+
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : undefined;
+};
+
+/** Entero desde input; acepta separadores y toma la parte entera. */
+export const parseIntegerInput = (raw: string): number | undefined => {
+  const n = parseDecimal(raw);
+  if (n === undefined) return undefined;
+  return Math.trunc(n);
+};
+
 /**
  * Calcula la fecha correspondiente al día de la semana.
  * @param diaSemana Número del día de la semana (1=Lunes, 7=Domingo)
