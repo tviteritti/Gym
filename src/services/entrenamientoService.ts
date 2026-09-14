@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { diaSemanaDesdeFechaIsoLocal } from '../utils/formatters';
 import type {
   StartTrainingDayRequest,
   RegisterExerciseExecutionRequest,
