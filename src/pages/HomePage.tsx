@@ -97,7 +97,7 @@ export const HomePage = () => {
         [
           e.ejercicioId,
           e.seriesEjecutadas
-            .map((s) => `${s.numeroSerie}:${s.pesoReal ?? ''}:${s.repeticiones ?? ''}`)
+            .map((s) => `${s.esCompleja ? 'c' : ''}${s.numeroSerie}:${s.pesoReal ?? ''}:${s.repeticiones ?? ''}`)
             .join('|'),
         ].join('@')
       ),
@@ -162,13 +162,14 @@ export const HomePage = () => {
   // Crear un EjercicioPlanificado temporal desde un EjercicioEjecutado
   const crearEjercicioPlanificadoTemporal = (ejecutado: EjercicioEjecutado, orden: number): EjercicioPlanificado => {
     const ejercicioInfo = ejercicios.find(e => e.id === ejecutado.ejercicioId);
+    const seriesNormales = ejecutado.seriesEjecutadas.filter((s) => !s.esCompleja);
     return {
       id: `temp-${ejecutado.ejercicioId}-${ejecutado.id || Date.now()}`,
       ejercicioId: ejecutado.ejercicioId,
       ejercicioNombre: ejecutado.ejercicioNombre || ejercicioInfo?.nombre || 'Ejercicio',
       orden,
-      seriesPlanificadas: ejecutado.seriesEjecutadas.length > 0
-        ? ejecutado.seriesEjecutadas.map((serie, idx) => ({
+      seriesPlanificadas: seriesNormales.length > 0
+        ? seriesNormales.map((serie, idx) => ({
             id: `temp-serie-${idx}`,
             numeroSerie: serie.numeroSerie,
             pesoPlanificado: serie.pesoReal,

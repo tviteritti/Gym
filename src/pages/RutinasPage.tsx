@@ -10,6 +10,7 @@ import { LoadingOverlay } from "../components/ui/LoadingOverlay"
 import type { Rutina, Ejercicio } from "../types"
 import { getMuscleColorWithDefault } from "../constants/muscleColors"
 import { calcularResumenSeriesRutina } from "../utils/rutinaVolumen"
+import { TECNICAS_INTENSIDAD, formatVolumen, seriesTecnica } from "../utils/tecnicaIntensidad"
 
 type RutinaAction = "duplicate" | "activate" | "delete"
 
@@ -245,6 +246,10 @@ export const RutinasPage = () => {
                               (acc, ep) => acc + (ep.seriesPlanificadas?.length ?? 0),
                               0
                             )
+                            const complejasDia = dia.ejerciciosPlanificados.reduce(
+                              (acc, ep) => acc + seriesTecnica(ep),
+                              0
+                            )
                             return (
                             <div
                               key={dia.id}
@@ -256,6 +261,9 @@ export const RutinasPage = () => {
                                 </h5>
                                 <span className="text-xs text-dark-text-muted tabular-nums">
                                   {seriesDia} {seriesDia === 1 ? "serie" : "series"}
+                                  {complejasDia > 0 ? (
+                                    <span className="text-orange-300"> + {complejasDia} complejas</span>
+                                  ) : null}
                                 </span>
                               </div>
                               {dia.ejerciciosPlanificados.length === 0 ? (
@@ -281,14 +289,24 @@ export const RutinasPage = () => {
                                           <span className="font-medium text-dark-text text-sm">
                                             {ejercicio.orden}. {ejercicio.ejercicioNombre}
                                           </span>
-                                          {ejercicio.esBilbo && (
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/25 text-purple-300">
-                                              Bilbo
-                                            </span>
-                                          )}
+                                          <span className="flex gap-1">
+                                            {ejercicio.esBilbo && (
+                                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/25 text-purple-300">
+                                                Bilbo
+                                              </span>
+                                            )}
+                                            {ejercicio.tecnicaIntensidad && (
+                                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/25 text-orange-300">
+                                                {TECNICAS_INTENSIDAD[ejercicio.tecnicaIntensidad].label} ×{seriesTecnica(ejercicio)}
+                                              </span>
+                                            )}
+                                          </span>
                                         </div>
                                         <p className="text-xs text-dark-text-muted">
                                           {nSeries} {nSeries === 1 ? "serie" : "series"}
+                                          {ejercicio.tecnicaIntensidad ? (
+                                            <span className="text-orange-300"> + {seriesTecnica(ejercicio)} complejas</span>
+                                          ) : null}
                                         </p>
                                       </div>
                                     )
@@ -317,7 +335,9 @@ export const RutinasPage = () => {
                                   {resumenSeries.porDia.map((row, idx) => (
                                     <tr key={`${row.diaSemana}-${idx}`} className="bg-dark-bg/50">
                                       <td className="px-3 py-2">{row.diaNombre}</td>
-                                      <td className="px-3 py-2 text-right tabular-nums">{row.series}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums">
+                                        {formatVolumen(row.series, row.complejas)}
+                                      </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -330,6 +350,7 @@ export const RutinasPage = () => {
                             </h4>
                             <p className="text-xs text-dark-text-muted mb-3">
                               Cada serie planificada en la rutina cuenta como 1. Total = suma de todas las series de la semana.
+                              Las series de técnicas (drop-set, rest-pause, FST-7) se muestran aparte como "+ N" y no cuentan en el %.
                             </p>
                             <div className="overflow-x-auto rounded-lg border border-dark-border">
                               <table className="w-full text-sm text-left">
@@ -349,7 +370,9 @@ export const RutinasPage = () => {
                                     return (
                                       <tr key={row.musculo} className="bg-dark-bg/50">
                                         <td className="px-3 py-2">{row.musculo}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{row.series}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums">
+                                          {formatVolumen(row.series, row.complejas)}
+                                        </td>
                                         <td className="px-3 py-2 text-right tabular-nums">{pct}%</td>
                                       </tr>
                                     )
@@ -357,7 +380,7 @@ export const RutinasPage = () => {
                                   <tr className="bg-dark-surface font-semibold border-t-2 border-dark-border">
                                     <td className="px-3 py-2">Total semanal</td>
                                     <td className="px-3 py-2 text-right tabular-nums">
-                                      {resumenSeries.totalSemanal}
+                                      {formatVolumen(resumenSeries.totalSemanal, resumenSeries.totalComplejasSemanal)}
                                     </td>
                                     <td className="px-3 py-2 text-right">100%</td>
                                   </tr>

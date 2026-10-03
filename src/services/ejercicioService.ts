@@ -184,6 +184,7 @@ export const ejercicioService = {
           .from('series_ejecutadas')
           .select('*')
           .eq('ejercicio_ejecutado_id', ej.id)
+          .order('es_compleja', { ascending: true })
           .order('numero_serie', { ascending: true });
 
         if (seriesError) {
@@ -198,6 +199,7 @@ export const ejercicioService = {
             numeroSerie: s.numero_serie,
             pesoReal: s.peso_real ? parseFloat(s.peso_real.toString()) : undefined,
             repeticiones: s.repeticiones || undefined,
+            ...(s.es_compleja ? { esCompleja: true } : {}),
           })),
         };
       })

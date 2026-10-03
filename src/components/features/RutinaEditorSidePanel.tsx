@@ -52,7 +52,7 @@ export const RutinaEditorSidePanel = ({
   const [errorBilbo, setErrorBilbo] = useState("")
   const [okBilbo, setOkBilbo] = useState("")
 
-  const { total, porMusculo } = useMemo(
+  const { total, totalComplejas, porMusculo } = useMemo(
     () => calcularSeriesPorMusculoDesdeDias(dias, ejercicios),
     [dias, ejercicios]
   )
@@ -252,13 +252,19 @@ export const RutinaEditorSidePanel = ({
           <>
             <p className="text-xs text-dark-text-muted mb-2">
               Total semanal: <span className="font-semibold text-dark-text">{total}</span> series
+              {totalComplejas > 0 ? (
+                <>
+                  {" "}
+                  + <span className="font-semibold text-orange-300">{totalComplejas}</span> complejas
+                </>
+              ) : null}
             </p>
             <div className="overflow-x-auto rounded-md border border-dark-border">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-dark-border bg-dark-surface/80 text-left text-dark-text-muted">
                     <th className="px-2 py-1.5 font-medium">Músculo</th>
-                    <th className="px-2 py-1.5 font-medium text-right w-16">Series</th>
+                    <th className="px-2 py-1.5 font-medium text-right w-20">Series</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -276,7 +282,12 @@ export const RutinaEditorSidePanel = ({
                             <span className="text-dark-text">{row.musculo}</span>
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-dark-text">{row.series}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-dark-text whitespace-nowrap">
+                          {row.series}
+                          {row.complejas > 0 ? (
+                            <span className="text-orange-300"> + {row.complejas}</span>
+                          ) : null}
+                        </td>
                       </tr>
                     )
                   })}

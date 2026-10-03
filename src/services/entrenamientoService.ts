@@ -19,6 +19,7 @@ const mapEntrenamientoFromDB = (entrenamientoData: any): Entrenamiento => {
       numeroSerie: serie.numero_serie,
       pesoReal: serie.peso_real ? parseFloat(serie.peso_real.toString()) : undefined,
       repeticiones: serie.repeticiones || undefined,
+      ...(serie.es_compleja ? { esCompleja: true } : {}),
     }));
 
     return {
@@ -118,6 +119,7 @@ export const entrenamientoService = {
         numero_serie: serie.numeroSerie,
         peso_real: serie.pesoReal || null,
         repeticiones: serie.repeticiones || null,
+        es_compleja: serie.esCompleja ?? false,
       }));
 
       const { error: seriesError } = await supabase
@@ -166,11 +168,14 @@ export const entrenamientoService = {
       return null;
     }
 
-    // Ordenar series ejecutadas por numero_serie
+    // Ordenar series ejecutadas: primero las normales, luego las complejas, cada grupo por numero_serie
     if (entrenamientoData.ejercicios_ejecutados) {
       entrenamientoData.ejercicios_ejecutados.forEach((ej: any) => {
         if (ej.series_ejecutadas) {
-          ej.series_ejecutadas.sort((a: any, b: any) => a.numero_serie - b.numero_serie);
+          ej.series_ejecutadas.sort(
+            (a: any, b: any) =>
+              Number(!!a.es_compleja) - Number(!!b.es_compleja) || a.numero_serie - b.numero_serie
+          );
         }
       });
     }
@@ -262,6 +267,7 @@ export const entrenamientoService = {
       .from('series_ejecutadas')
       .select('ejercicio_ejecutado_id, peso_real, repeticiones')
       .in('ejercicio_ejecutado_id', ejecutadoIds)
+      .eq('es_compleja', false)
       .not('peso_real', 'is', null)
       .not('repeticiones', 'is', null);
 
@@ -367,7 +373,7 @@ export const entrenamientoService = {
 
     const { data: seriesRows, error: sErr } = await supabase
       .from('series_ejecutadas')
-      .select('ejercicio_ejecutado_id, numero_serie, peso_real, repeticiones')
+      .select('ejercicio_ejecutado_id, numero_serie, peso_real, repeticiones, es_compleja')
       .in('ejercicio_ejecutado_id', ejecutadoIds);
 
     if (sErr) {
@@ -381,11 +387,14 @@ export const entrenamientoService = {
         numeroSerie: s.numero_serie,
         pesoReal: s.peso_real != null ? parseFloat(s.peso_real.toString()) : undefined,
         repeticiones: s.repeticiones ?? undefined,
+        ...(s.es_compleja ? { esCompleja: true } : {}),
       });
       seriesPorEjecutado.set(s.ejercicio_ejecutado_id, list);
     }
     seriesPorEjecutado.forEach((list) => {
-      list.sort((a, b) => a.numeroSerie - b.numeroSerie);
+      list.sort(
+        (a, b) => Number(!!a.esCompleja) - Number(!!b.esCompleja) || a.numeroSerie - b.numeroSerie
+      );
     });
 
     ejecutadoIdPorEjercicio.forEach((ejecutadoId, ejId) => {
@@ -452,6 +461,7 @@ export const entrenamientoService = {
       .from('series_ejecutadas')
       .select('peso_real, repeticiones')
       .in('ejercicio_ejecutado_id', ejecutadoIds)
+      .eq('es_compleja', false)
       .gte('peso_real', pesoMin)
       .lte('peso_real', pesoMax)
       .not('repeticiones', 'is', null);

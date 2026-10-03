@@ -9,6 +9,9 @@ interface SerieInputProps {
   onUpdate: (peso: number | undefined, reps: number | undefined) => void;
   disabled?: boolean;
   hasUserInteracted?: boolean;
+  /** Texto del círculo; por defecto el número de serie */
+  etiqueta?: string;
+  esCompleja?: boolean;
 }
 
 export const SerieInput = ({
@@ -18,6 +21,8 @@ export const SerieInput = ({
   onUpdate,
   disabled = false,
   hasUserInteracted = false,
+  etiqueta,
+  esCompleja = false,
 }: SerieInputProps) => {
   const [peso, setPeso] = useState<number | undefined>(pesoInicial);
   const [reps, setReps] = useState<number | undefined>(repsInicial);
@@ -51,9 +56,19 @@ export const SerieInput = ({
   }, [disabled]);
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 glass-morphism rounded-xl border border-dark-border/50">
-      <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-bold text-sm sm:text-base shadow-glow">
-        {numeroSerie}
+    <div
+      className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 glass-morphism rounded-xl border ${
+        esCompleja ? 'border-orange-500/40' : 'border-dark-border/50'
+      }`}
+    >
+      <div
+        className={`flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-white rounded-full font-bold text-sm sm:text-base ${
+          esCompleja
+            ? 'bg-gradient-to-r from-orange-500 to-red-500'
+            : 'bg-gradient-to-r from-blue-600 to-purple-600 shadow-glow'
+        }`}
+      >
+        {etiqueta ?? numeroSerie}
       </div>
       <div className="flex-1 grid grid-cols-2 gap-2 sm:gap-3 min-w-0">
         <NumberInput

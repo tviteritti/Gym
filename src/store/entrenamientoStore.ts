@@ -87,6 +87,7 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
           numeroSerie: s.numeroSerie,
           pesoReal: s.pesoReal,
           repeticiones: s.repeticiones,
+          esCompleja: s.esCompleja,
         })),
       });
 
@@ -95,7 +96,7 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
         const ejercicioBilbo = await bilboService.getByEjercicio(usuarioId, ejercicioId);
         if (ejercicioBilbo) {
           // Obtener la primera serie (serie 1)
-          const primeraSerie = series.find(s => s.numeroSerie === 1);
+          const primeraSerie = series.find(s => s.numeroSerie === 1 && !s.esCompleja);
           if (primeraSerie && primeraSerie.pesoReal !== undefined && primeraSerie.repeticiones !== undefined) {
             // Guardar el progreso del método Bilbo
             await bilboService.guardarProgreso(

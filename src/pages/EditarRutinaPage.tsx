@@ -17,8 +17,10 @@ import {
   getDragDataEjercicioRutina,
   ordenarDiasPorSemana,
 } from "../utils/rutinaSeries"
-import { contarSeriesDiaRutina } from "../utils/rutinaVolumen"
-import type { Ejercicio, DiaRutinaRequest, EjercicioRutinaRequest } from "../types"
+import { contarSeriesDiaRutina, contarSeriesComplejasDiaRutina } from "../utils/rutinaVolumen"
+import { formatVolumen } from "../utils/tecnicaIntensidad"
+import { TecnicaIntensidadSelect } from "../components/features/TecnicaIntensidadSelect"
+import type { Ejercicio, DiaRutinaRequest, EjercicioRutinaRequest, TecnicaIntensidad } from "../types"
 
 export const EditarRutinaPage = () => {
   const { rutinaId } = useParams<{ rutinaId: string }>()
@@ -63,6 +65,8 @@ export const EditarRutinaPage = () => {
           esBilbo: !!ej.esBilbo,
           tipoAgrupacion: ej.tipoAgrupacion,
           grupoAgrupacion: ej.grupoAgrupacion,
+          tecnicaIntensidad: ej.tecnicaIntensidad,
+          tecnicaSeries: ej.tecnicaSeries,
           series:
             ej.seriesPlanificadas.length > 0
               ? ej.seriesPlanificadas.map((s) => ({ numeroSerie: s.numeroSerie }))
@@ -133,6 +137,19 @@ export const EditarRutinaPage = () => {
   ) => {
     const nuevosDias = [...dias]
     ;(nuevosDias[diaIndex].ejercicios[ejercicioIndex] as unknown as Record<string, unknown>)[campo] = valor
+    setDias(nuevosDias)
+  }
+
+  const actualizarTecnica = (
+    diaIndex: number,
+    ejercicioIndex: number,
+    tecnica: TecnicaIntensidad | undefined,
+    series: number | undefined
+  ) => {
+    const nuevosDias = [...dias]
+    const ej = nuevosDias[diaIndex].ejercicios[ejercicioIndex]
+    ej.tecnicaIntensidad = tecnica
+    ej.tecnicaSeries = series
     setDias(nuevosDias)
   }
 
@@ -241,7 +258,7 @@ export const EditarRutinaPage = () => {
                     <p className="text-sm text-dark-text-muted">
                       Volumen del día ={" "}
                       <span className="font-semibold tabular-nums text-dark-text">
-                        {contarSeriesDiaRutina(dia)}
+                        {formatVolumen(contarSeriesDiaRutina(dia), contarSeriesComplejasDiaRutina(dia))}
                       </span>
                     </p>
                   </div>
@@ -397,6 +414,14 @@ export const EditarRutinaPage = () => {
                           </select>
                         ) : null}
                       </div>
+                      <TecnicaIntensidadSelect
+                        tecnica={ejercicio.tecnicaIntensidad}
+                        series={ejercicio.tecnicaSeries}
+                        onChange={(tecnica, series) =>
+                          actualizarTecnica(diaIndex, ejercicioIndex, tecnica, series)
+                        }
+                        controlClassName={controlRowClass}
+                      />
                       <Button
                         type="button"
                         variant="danger"

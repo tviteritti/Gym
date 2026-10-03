@@ -43,6 +43,9 @@ export interface SeriePlanificada {
 
 export type TipoAgrupacion = 'superserie' | 'biserie';
 
+/** Técnica de intensidad aplicada al final del ejercicio; sus series no cuentan como series normales. */
+export type TecnicaIntensidad = 'dropset' | 'restpause' | 'fst7';
+
 export interface EjercicioPlanificado {
   id: string;
   ejercicioId: string;
@@ -51,6 +54,9 @@ export interface EjercicioPlanificado {
   esBilbo?: boolean;
   tipoAgrupacion?: TipoAgrupacion;
   grupoAgrupacion?: number;
+  tecnicaIntensidad?: TecnicaIntensidad;
+  /** Cantidad de series extra de la técnica */
+  tecnicaSeries?: number;
   seriesPlanificadas: SeriePlanificada[];
 }
 
@@ -76,12 +82,14 @@ export interface SerieEjecutada {
   numeroSerie: number;
   pesoReal?: number;
   repeticiones?: number;
+  /** Serie extra de una técnica de intensidad (drop-set, rest-pause, FST-7). Numeración propia desde 1. */
+  esCompleja?: boolean;
 }
 
 /** Última sesión registrada antes de una fecha (para comparar progreso). */
 export interface UltimaSesionEjercicio {
   fecha: string;
-  series: { numeroSerie: number; pesoReal?: number; repeticiones?: number }[];
+  series: { numeroSerie: number; pesoReal?: number; repeticiones?: number; esCompleja?: boolean }[];
 }
 
 export interface EjercicioEjecutado {
@@ -160,6 +168,8 @@ export interface EjercicioRutinaRequest {
   esBilbo?: boolean;
   tipoAgrupacion?: TipoAgrupacion;
   grupoAgrupacion?: number;
+  tecnicaIntensidad?: TecnicaIntensidad;
+  tecnicaSeries?: number;
   rangoRepeticionesMin?: number;
   rangoRepeticionesMax?: number;
   series: SerieRutinaRequest[];
@@ -187,6 +197,7 @@ export interface SerieEjecucionRequest {
   numeroSerie: number;
   pesoReal?: number;
   repeticiones?: number;
+  esCompleja?: boolean;
 }
 
 // Método Bilbo

@@ -7,6 +7,7 @@ import type {
   EjercicioPlanificado,
   SeriePlanificada,
 } from '../types';
+import { esTecnicaIntensidad, seriesTecnica } from '../utils/tecnicaIntensidad';
 
 const mapRutinaFromDB = (rutinaData: any): Rutina => {
   const nombresDias = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -30,6 +31,8 @@ const mapRutinaFromDB = (rutinaData: any): Rutina => {
         esBilbo: ejPlan.es_bilbo || false,
         tipoAgrupacion: ejPlan.tipo_agrupacion || undefined,
         grupoAgrupacion: ejPlan.grupo_agrupacion ?? undefined,
+        tecnicaIntensidad: esTecnicaIntensidad(ejPlan.tecnica_intensidad) ? ejPlan.tecnica_intensidad : undefined,
+        tecnicaSeries: ejPlan.tecnica_series ?? undefined,
         seriesPlanificadas,
       };
     });
@@ -64,6 +67,8 @@ const rutinaToCreateRequest = (rutina: Rutina, usuarioId: string, nombre: string
       esBilbo: ejercicio.esBilbo,
       tipoAgrupacion: ejercicio.tipoAgrupacion,
       grupoAgrupacion: ejercicio.grupoAgrupacion,
+      tecnicaIntensidad: ejercicio.tecnicaIntensidad,
+      tecnicaSeries: ejercicio.tecnicaSeries,
       series: ejercicio.seriesPlanificadas.map((serie) => ({
         numeroSerie: serie.numeroSerie,
       })),
@@ -97,6 +102,8 @@ async function insertDiasYEjercicios(rutinaId: string, dias: DiaRutinaRequest[])
           es_bilbo: ejercicio.esBilbo || false,
           tipo_agrupacion: ejercicio.tipoAgrupacion || null,
           grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
+          tecnica_intensidad: ejercicio.tecnicaIntensidad || null,
+          tecnica_series: ejercicio.tecnicaIntensidad ? seriesTecnica(ejercicio) : null,
           rango_repeticiones_min: null,
           rango_repeticiones_max: null,
         })

@@ -17,6 +17,22 @@ import { entrenamientoService } from '../../services/entrenamientoService';
 import { getMuscleColorWithDefault } from '../../constants/muscleColors';
 import { calcularProximoPesoBilbo } from '../../utils/bilbo';
 import { formatFechaCortaEs, parseDecimal } from '../../utils/formatters';
+import { TECNICAS_INTENSIDAD, seriesTecnica } from '../../utils/tecnicaIntensidad';
+
+/** Filas de series complejas: tantas como las planificadas o las ya guardadas (la mayor). */
+const construirComplejas = (guardadas: SerieEjecutada[], cantidadPlan: number): SerieEjecutada[] => {
+  const maxGuardada = guardadas.reduce((m, s) => Math.max(m, s.numeroSerie), 0);
+  const total = Math.max(cantidadPlan, maxGuardada);
+  return Array.from({ length: total }, (_, i) => {
+    const guardada = guardadas.find((s) => s.numeroSerie === i + 1);
+    return {
+      numeroSerie: i + 1,
+      pesoReal: guardada?.pesoReal,
+      repeticiones: guardada?.repeticiones,
+      esCompleja: true,
+    };
+  });
+};
 
 interface EjercicioCardProps {
   ejercicio: EjercicioPlanificado;
@@ -48,6 +64,7 @@ export const EjercicioCard = ({
   ultimaSesionPorEjercicioId,
 }: EjercicioCardProps) => {
   const [series, setSeries] = useState<SerieEjecutada[]>([]);
+  const [complejas, setComplejas] = useState<SerieEjecutada[]>([]);
   const [isSaved, setIsSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -75,6 +92,19 @@ export const EjercicioCard = ({
 
   const esBilboDelDia = esBilboEnRutina;
 
+  const seriesNormalesProp = useMemo(
+    () => seriesEjecutadas.filter((s) => !s.esCompleja),
+    [seriesEjecutadas]
+  );
+  const complejasProp = useMemo(
+    () => seriesEjecutadas.filter((s) => s.esCompleja),
+    [seriesEjecutadas]
+  );
+  const tecnica = ejercicio.tecnicaIntensidad;
+  const tecnicaInfo = tecnica ? TECNICAS_INTENSIDAD[tecnica] : null;
+  const cantidadComplejasPlan = seriesTecnica(ejercicio);
+  const prefijoCompleja = tecnicaInfo?.prefijo ?? 'E';
+
   const pesoObjetivoBilbo = useMemo(() => {
     if (!esBilboDelDia || !ejercicioBilbo) return null;
     return calcularProximoPesoBilbo(ejercicioBilbo, ultimoProgreso);
@@ -93,9 +123,11 @@ export const EjercicioCard = ({
   const pesoDefaultConsulta = useMemo(() => {
     if (esBilboDelDia && pesoObjetivoBilbo !== null) return pesoObjetivoBilbo;
     if (resumenUltima?.series?.length) {
-      const s1 = resumenUltima.series.find((s) => s.numeroSerie === 1 && s.pesoReal != null);
+      const s1 = resumenUltima.series.find(
+        (s) => s.numeroSerie === 1 && !s.esCompleja && s.pesoReal != null
+      );
       if (s1?.pesoReal != null) return s1.pesoReal;
-      const conPeso = resumenUltima.series.find((s) => s.pesoReal != null);
+      const conPeso = resumenUltima.series.find((s) => !s.esCompleja && s.pesoReal != null);
       if (conPeso?.pesoReal != null) return conPeso.pesoReal;
     }
     return undefined;
@@ -209,14 +241,15 @@ export const EjercicioCard = ({
     setIsEditMode(false);
     setUserInteracted(false);
     setSeries(
-      seriesEjecutadas.length > 0
-        ? seriesEjecutadas
+      seriesNormalesProp.length > 0
+        ? seriesNormalesProp
         : ejercicio.seriesPlanificadas.map((sp) => ({
             numeroSerie: sp.numeroSerie,
             pesoReal: sp.pesoPlanificado,
             repeticiones: undefined,
           }))
     );
+    setComplejas(construirComplejas(complejasProp, cantidadComplejasPlan));
     setHasChanges(false);
   };
 
@@ -255,11 +288,16 @@ export const EjercicioCard = ({
   }, [ejercicioSeleccionadoId, usuarioId, esBilboEnRutina]);
 
   useEffect(() => {
+    const nuevasComplejas = construirComplejas(complejasProp, cantidadComplejasPlan);
+    setComplejas((prev) =>
+      JSON.stringify(prev) === JSON.stringify(nuevasComplejas) ? prev : nuevasComplejas
+    );
+
     if (seriesEjecutadas.length > 0) {
       const seriesJson = JSON.stringify(series);
-      const nuevasSeriesJson = JSON.stringify(seriesEjecutadas);
+      const nuevasSeriesJson = JSON.stringify(seriesNormalesProp);
       if (seriesJson !== nuevasSeriesJson) {
-        setSeries(seriesEjecutadas);
+        setSeries(seriesNormalesProp);
         setIsSaved(true);
         setHasChanges(false);
       }
@@ -278,7 +316,7 @@ export const EjercicioCard = ({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ejercicio.id, seriesEjecutadas.length, ejercicio.seriesPlanificadas.length]);
+  }, [ejercicio.id, seriesEjecutadas.length, ejercicio.seriesPlanificadas.length, cantidadComplejasPlan]);
 
   useEffect(() => {
     if (!ejercicioBilbo || !esBilboDelDia) return;
@@ -287,7 +325,7 @@ export const EjercicioCard = ({
     const target = calcularProximoPesoBilbo(ejercicioBilbo, ultimoProgreso);
     if (target === null) return;
 
-    const s1FromProps = seriesEjecutadas.find((s) => s.numeroSerie === 1);
+    const s1FromProps = seriesEjecutadas.find((s) => s.numeroSerie === 1 && !s.esCompleja);
     if (s1FromProps?.repeticiones != null) return;
 
     setSeries((prev) => {
@@ -351,10 +389,40 @@ export const EjercicioCard = ({
     });
   };
 
+  const handleComplejaUpdate = useCallback(
+    (numeroSerie: number, peso?: number, reps?: number) => {
+      if (!userInteracted && !isEditMode && (isSaved || seriesEjecutadas.length > 0)) {
+        return;
+      }
+      setComplejas((prev) =>
+        prev.map((s) => (s.numeroSerie === numeroSerie ? { ...s, pesoReal: peso, repeticiones: reps } : s))
+      );
+      setHasChanges(true);
+      setIsSaved(false);
+    },
+    [userInteracted, isEditMode, isSaved, seriesEjecutadas]
+  );
+
+  const handleAddCompleja = () => {
+    setComplejas((prev) => [
+      ...prev,
+      { numeroSerie: prev.length + 1, pesoReal: undefined, repeticiones: undefined, esCompleja: true },
+    ]);
+    setHasChanges(true);
+    setIsSaved(false);
+  };
+
+  const handleRemoveUltimaCompleja = () => {
+    setComplejas((prev) => prev.slice(0, -1));
+    setHasChanges(true);
+    setIsSaved(false);
+  };
+
   const handleSave = async () => {
     if (!ejercicioSeleccionadoId) return;
+    const complejasConDatos = complejas.filter((s) => s.pesoReal != null || s.repeticiones != null);
     try {
-      await registerExercise(usuarioId, fecha, ejercicioSeleccionadoId, series);
+      await registerExercise(usuarioId, fecha, ejercicioSeleccionadoId, [...series, ...complejasConDatos]);
       setIsSaved(true);
       setHasChanges(false);
       onSave?.();
@@ -436,6 +504,14 @@ export const EjercicioCard = ({
             )}
             {ejercicioBilbo && esBilboDelDia && (
               <span className="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">Método Bilbo</span>
+            )}
+            {tecnicaInfo && (
+              <span
+                className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-300 rounded"
+                title={tecnicaInfo.descripcion}
+              >
+                {tecnicaInfo.label} ×{cantidadComplejasPlan}
+              </span>
             )}
           </div>
         </div>
@@ -544,8 +620,13 @@ export const EjercicioCard = ({
             <p className="text-sm text-dark-text mb-2">{formatFechaCortaEs(resumenUltima.fecha)}</p>
             <ul className="space-y-1 text-sm text-dark-text">
               {resumenUltima.series.map((s) => (
-                <li key={s.numeroSerie} className="flex gap-2">
-                  <span className="text-dark-text-muted w-16">Serie {s.numeroSerie}</span>
+                <li
+                  key={`${s.esCompleja ? 'c' : 'n'}-${s.numeroSerie}`}
+                  className={`flex gap-2 ${s.esCompleja ? 'text-orange-300' : ''}`}
+                >
+                  <span className={s.esCompleja ? 'w-20 text-orange-300/80' : 'w-16 text-dark-text-muted'}>
+                    {s.esCompleja ? `Extra ${prefijoCompleja}${s.numeroSerie}` : `Serie ${s.numeroSerie}`}
+                  </span>
                   <span>
                     {s.pesoReal != null ? `${s.pesoReal} kg` : '—'}
                     {s.repeticiones != null ? ` × ${s.repeticiones} reps` : ''}
@@ -641,6 +722,59 @@ export const EjercicioCard = ({
           Agregar Serie
         </Button>
       </div>
+
+      {(tecnicaInfo || complejas.length > 0) && (
+        <div className="mb-4 rounded-lg border border-orange-500/40 bg-orange-500/5 p-3 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-orange-300">
+              {tecnicaInfo ? tecnicaInfo.label : 'Series extra'}
+              <span className="ml-2 text-xs font-normal text-orange-200/70">
+                No cuentan como series normales
+              </span>
+            </p>
+            {tecnicaInfo && <p className="text-xs text-dark-text-muted">{tecnicaInfo.descripcion}</p>}
+          </div>
+          {complejas.map((s, idx) => (
+            <div key={s.numeroSerie} className="flex items-center gap-2">
+              <div className="flex-1">
+                <SerieInput
+                  key={`c-${s.numeroSerie}-${ejercicioSeleccionadoId}`}
+                  numeroSerie={s.numeroSerie}
+                  etiqueta={`${prefijoCompleja}${s.numeroSerie}`}
+                  esCompleja
+                  pesoInicial={s.pesoReal}
+                  repsInicial={s.repeticiones}
+                  onUpdate={(peso, reps) => handleComplejaUpdate(s.numeroSerie, peso, reps)}
+                  disabled={loading || (isSaved && !hasChanges && !isEditMode)}
+                  hasUserInteracted={userInteracted || isEditMode}
+                />
+              </div>
+              {idx === complejas.length - 1 && s.numeroSerie > cantidadComplejasPlan && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={handleRemoveUltimaCompleja}
+                  disabled={loading || (isSaved && !hasChanges && !isEditMode)}
+                  className="flex-shrink-0"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAddCompleja}
+            disabled={loading || (isSaved && !hasChanges && !isEditMode)}
+            fullWidth
+          >
+            + Agregar serie extra
+          </Button>
+        </div>
+      )}
 
       <div className="flex gap-2">
         {onDelete && (

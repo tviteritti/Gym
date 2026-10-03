@@ -73,7 +73,7 @@ export const EjerciciosPage = () => {
 
   const handleStartEdit = (entrenamientoId: string, series: SerieEjecutada[]) => {
     setEditingEntrenamientoId(entrenamientoId);
-    setEditSeries(series.map((s) => ({ ...s })));
+    setEditSeries(series.filter((s) => !s.esCompleja).map((s) => ({ ...s })));
   };
 
   const handleCancelEdit = () => {
@@ -98,15 +98,21 @@ export const EjerciciosPage = () => {
   const handleSaveEdit = async () => {
     if (!usuario || !selectedEjercicio || !editingEntrenamientoId) return;
 
+    const complejasExistentes =
+      selectedEjercicio.ejecuciones
+        .find((e) => e.entrenamientoId === editingEntrenamientoId)
+        ?.seriesEjecutadas.filter((s) => s.esCompleja) ?? [];
+
     try {
       setSavingEdit(true);
       await entrenamientoService.registerExerciseExecution({
         entrenamientoId: editingEntrenamientoId,
         ejercicioId: selectedEjercicio.ejercicioId,
-        series: editSeries.map((s) => ({
+        series: [...editSeries, ...complejasExistentes].map((s) => ({
           numeroSerie: s.numeroSerie,
           pesoReal: s.pesoReal,
           repeticiones: s.repeticiones,
+          esCompleja: s.esCompleja,
         })),
       });
 
@@ -140,6 +146,7 @@ export const EjerciciosPage = () => {
       .map((e) => {
         let maxP = 0;
         for (const s of e.seriesEjecutadas) {
+          if (s.esCompleja) continue;
           if (s.pesoReal != null) maxP = Math.max(maxP, s.pesoReal);
         }
         return {
@@ -158,6 +165,7 @@ export const EjerciciosPage = () => {
       .map((e) => {
         let maxRm = 0;
         for (const s of e.seriesEjecutadas) {
+          if (s.esCompleja) continue;
           if (s.pesoReal != null && s.repeticiones != null) {
             maxRm = Math.max(maxRm, calcularRM(s.pesoReal, s.repeticiones));
           }
@@ -382,10 +390,12 @@ export const EjerciciosPage = () => {
                           <div className="space-y-2">
                             {ejecucion.seriesEjecutadas.map((serie) => (
                               <div
-                                key={serie.numeroSerie}
-                                className="flex gap-4 text-sm text-dark-text"
+                                key={`${serie.esCompleja ? 'c' : 'n'}-${serie.numeroSerie}`}
+                                className={`flex gap-4 text-sm ${serie.esCompleja ? 'text-orange-300' : 'text-dark-text'}`}
                               >
-                                <span className="font-semibold">Serie {serie.numeroSerie}:</span>
+                                <span className="font-semibold">
+                                  {serie.esCompleja ? `Extra ${serie.numeroSerie}:` : `Serie ${serie.numeroSerie}:`}
+                                </span>
                                 {serie.pesoReal != null && serie.pesoReal > 0 && (
                                   <span>{serie.pesoReal} kg</span>
                                 )}
