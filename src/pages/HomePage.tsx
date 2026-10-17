@@ -11,6 +11,7 @@ import { Card } from '../components/ui/Card';
 import { DaySelector } from '../components/features/DaySelector';
 import { EjercicioCard } from '../components/features/EjercicioCard';
 import { formatDiaSemana, getDiaSemanaFromDate, getDateForDayOfWeek } from '../utils/formatters';
+import { armarSlotsEntrenamiento } from '../utils/slotsEntrenamiento';
 import type {
   Rutina,
   Ejercicio,
@@ -117,10 +118,7 @@ export const HomePage = () => {
 
     const diaDR = rutina.diasDeRutina.find((d) => d.diaSemana === selectedDay);
     const planned = diaDR?.ejerciciosPlanificados ?? [];
-    const idsEnRutina = new Set(planned.map((e) => e.ejercicioId));
-    const idsExecuted = (entrenamiento?.ejerciciosEjecutados ?? [])
-      .filter((ee) => !idsEnRutina.has(ee.ejercicioId))
-      .map((ee) => ee.ejercicioId);
+    const idsExecuted = (entrenamiento?.ejerciciosEjecutados ?? []).map((ee) => ee.ejercicioId);
     const idsNuevos = ejerciciosNuevos.map((e) => e.ejercicioId);
     const allIds = [...new Set([...planned.map((p) => p.ejercicioId), ...idsExecuted, ...idsNuevos])];
     const fechaSel = getDateForDayOfWeek(selectedDay, weekOffset);
@@ -159,33 +157,13 @@ export const HomePage = () => {
   const ejerciciosDelDiaPlanificados = diaDeRutina?.ejerciciosPlanificados || [];
   const fechaSeleccionada = getDateForDayOfWeek(selectedDay, weekOffset);
   
-  // Crear un EjercicioPlanificado temporal desde un EjercicioEjecutado
-  const crearEjercicioPlanificadoTemporal = (ejecutado: EjercicioEjecutado, orden: number): EjercicioPlanificado => {
-    const ejercicioInfo = ejercicios.find(e => e.id === ejecutado.ejercicioId);
-    const seriesNormales = ejecutado.seriesEjecutadas.filter((s) => !s.esCompleja);
-    return {
-      id: `temp-${ejecutado.ejercicioId}-${ejecutado.id || Date.now()}`,
-      ejercicioId: ejecutado.ejercicioId,
-      ejercicioNombre: ejecutado.ejercicioNombre || ejercicioInfo?.nombre || 'Ejercicio',
-      orden,
-      seriesPlanificadas: seriesNormales.length > 0
-        ? seriesNormales.map((serie, idx) => ({
-            id: `temp-serie-${idx}`,
-            numeroSerie: serie.numeroSerie,
-            pesoPlanificado: serie.pesoReal,
-          }))
-        : [{ id: 'temp-1', numeroSerie: 1, pesoPlanificado: undefined }],
-    };
-  };
-
-  // Identificar ejercicios ejecutados que NO están en la rutina
-  const ejerciciosIdsEnRutina = new Set(ejerciciosDelDiaPlanificados.map(e => e.ejercicioId));
-  const ejerciciosAdicionales = entrenamiento?.ejerciciosEjecutados
-    .filter(ee => !ejerciciosIdsEnRutina.has(ee.ejercicioId))
-    .map((ee, idx) => crearEjercicioPlanificadoTemporal(ee, ejerciciosDelDiaPlanificados.length + idx + 1)) || [];
-
-  // Combinar ejercicios de la rutina, ejercicios adicionales guardados, y ejercicios nuevos temporales
-  const todosLosEjercicios = [...ejerciciosDelDiaPlanificados, ...ejerciciosAdicionales, ...ejerciciosNuevos];
+  const slots = armarSlotsEntrenamiento(
+    ejerciciosDelDiaPlanificados,
+    entrenamiento?.ejerciciosEjecutados ?? [],
+    ejerciciosNuevos
+  );
+  const slotPorId = new Map(slots.map((s) => [s.ejercicio.id, s]));
+  const todosLosEjercicios = slots.map((s) => s.ejercicio);
   
   // Verificar si hay algún entrenamiento para el día seleccionado (basado en si tiene ejercicios ejecutados)
   const tieneDatos = entrenamiento && entrenamiento.ejerciciosEjecutados.length > 0;
@@ -425,12 +403,11 @@ export const HomePage = () => {
                             <span className="text-sm font-bold uppercase tracking-wide">{label}</span>
                           </div>
                           {entry.items.map((ejercicio, idx) => {
-                            const ejercicioEjecutado = entrenamiento?.ejerciciosEjecutados.find(
-                              (ee) => ee.ejercicioId === ejercicio.ejercicioId
-                            );
+                            const slot = slotPorId.get(ejercicio.id);
+                            const ejercicioEjecutado = slot?.ejecutado;
                             const ejercicioInfo = ejercicios.find(e => e.id === ejercicio.ejercicioId);
-                            const esAdicional = ejerciciosAdicionales.some(ea => ea.id === ejercicio.id);
-                            const esNuevo = ejerciciosNuevos.some(en => en.id === ejercicio.id);
+                            const esNuevo = !!slot?.esNuevo;
+                            const esAdicional = !!slot?.esAdicional;
                             return (
                               <div key={`${selectedDay}-${ejercicio.id}`}>
                                 <EjercicioCard
@@ -442,6 +419,9 @@ export const HomePage = () => {
                                   musculoPrincipal={ejercicioInfo?.musculoPrincipal}
                                   ejerciciosDisponibles={ejercicios}
                                   esEjercicioAdicional={esAdicional || esNuevo}
+                                  ejercicioEjecutadoId={ejercicioEjecutado?.id}
+                                  ejercicioPlanificadoId={slot?.ejercicioPlanificadoId}
+                                  ordenSlot={slot?.ejercicioPlanificadoId ? ejercicio.orden : undefined}
                                   esBilboEnRutina={!!ejercicio.esBilbo}
                                   ultimaSesionPorEjercicioId={ultimaSesionMap}
                                   onDelete={
@@ -468,12 +448,11 @@ export const HomePage = () => {
                       const ejercicio = entry.item;
                       const currentIndex = globalIndex;
                       globalIndex++;
-                      const ejercicioEjecutado = entrenamiento?.ejerciciosEjecutados.find(
-                        (ee) => ee.ejercicioId === ejercicio.ejercicioId
-                      );
+                      const slot = slotPorId.get(ejercicio.id);
+                      const ejercicioEjecutado = slot?.ejecutado;
                       const ejercicioInfo = ejercicios.find(e => e.id === ejercicio.ejercicioId);
-                      const esAdicional = ejerciciosAdicionales.some(ea => ea.id === ejercicio.id);
-                      const esNuevo = ejerciciosNuevos.some(en => en.id === ejercicio.id);
+                      const esNuevo = !!slot?.esNuevo;
+                      const esAdicional = !!slot?.esAdicional;
                       return (
                         <div 
                           key={`${selectedDay}-${ejercicio.id}`}
@@ -489,6 +468,9 @@ export const HomePage = () => {
                             musculoPrincipal={ejercicioInfo?.musculoPrincipal}
                             ejerciciosDisponibles={ejercicios}
                             esEjercicioAdicional={esAdicional || esNuevo}
+                            ejercicioEjecutadoId={ejercicioEjecutado?.id}
+                            ejercicioPlanificadoId={slot?.ejercicioPlanificadoId}
+                            ordenSlot={slot?.ejercicioPlanificadoId ? ejercicio.orden : undefined}
                             esBilboEnRutina={!!ejercicio.esBilbo}
                             ultimaSesionPorEjercicioId={ultimaSesionMap}
                             onDelete={

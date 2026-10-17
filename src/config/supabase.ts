@@ -216,18 +216,27 @@ export type Database = {
           id: string;
           entrenamiento_id: string;
           ejercicio_id: string;
+          ejercicio_planificado_id: string | null;
+          es_adicional: boolean;
+          orden: number | null;
           fecha_creacion: string;
         };
         Insert: {
           id?: string;
           entrenamiento_id: string;
           ejercicio_id: string;
+          ejercicio_planificado_id?: string | null;
+          es_adicional?: boolean;
+          orden?: number | null;
           fecha_creacion?: string;
         };
         Update: {
           id?: string;
           entrenamiento_id?: string;
           ejercicio_id?: string;
+          ejercicio_planificado_id?: string | null;
+          es_adicional?: boolean;
+          orden?: number | null;
           fecha_creacion?: string;
         };
       };

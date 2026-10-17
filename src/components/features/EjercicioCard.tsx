@@ -44,6 +44,12 @@ interface EjercicioCardProps {
   ejerciciosDisponibles: Ejercicio[];
   onDelete?: () => void;
   esEjercicioAdicional?: boolean;
+  /** Fila ya guardada de esta aparición. */
+  ejercicioEjecutadoId?: string;
+  /** Slot de la rutina, para no mezclarlo con otra aparición del mismo ejercicio. */
+  ejercicioPlanificadoId?: string;
+  /** Posición del slot en el día. */
+  ordenSlot?: number;
   /** Si el slot en la rutina está marcado como ejercicio Bilbo (checkbox en editor de rutina). */
   esBilboEnRutina?: boolean;
   /** null: Home cargando; mapa listo con null si no hay historial previo a la fecha del día */
@@ -60,6 +66,9 @@ export const EjercicioCard = ({
   ejerciciosDisponibles,
   onDelete,
   esEjercicioAdicional = false,
+  ejercicioEjecutadoId,
+  ejercicioPlanificadoId,
+  ordenSlot,
   esBilboEnRutina = false,
   ultimaSesionPorEjercicioId,
 }: EjercicioCardProps) => {
@@ -98,6 +107,16 @@ export const EjercicioCard = ({
   );
   const complejasProp = useMemo(
     () => seriesEjecutadas.filter((s) => s.esCompleja),
+    [seriesEjecutadas]
+  );
+  const seriesPropSig = useMemo(
+    () =>
+      seriesEjecutadas
+        .map(
+          (s) =>
+            `${s.esCompleja ? 'c' : 'n'}${s.numeroSerie}:${s.pesoReal ?? ''}:${s.repeticiones ?? ''}`
+        )
+        .join('|'),
     [seriesEjecutadas]
   );
   const tecnica = ejercicio.tecnicaIntensidad;
@@ -254,9 +273,13 @@ export const EjercicioCard = ({
   };
 
   useEffect(() => {
+    setEjercicioSeleccionadoId(ejercicio.ejercicioId);
+  }, [ejercicio.id, ejercicio.ejercicioId]);
+
+  useEffect(() => {
     const nuevoEjercicio = ejerciciosDisponibles.find((e) => e.id === ejercicioSeleccionadoId);
     setEjercicioSeleccionado(nuevoEjercicio);
-    if (nuevoEjercicio) {
+    if (nuevoEjercicio && ejercicioSeleccionadoId !== ejercicio.ejercicioId) {
       setHasChanges(true);
       setIsSaved(false);
     }
@@ -316,7 +339,7 @@ export const EjercicioCard = ({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ejercicio.id, seriesEjecutadas.length, ejercicio.seriesPlanificadas.length, cantidadComplejasPlan]);
+  }, [ejercicio.id, ejercicio.ejercicioId, seriesPropSig, ejercicio.seriesPlanificadas.length, cantidadComplejasPlan]);
 
   useEffect(() => {
     if (!ejercicioBilbo || !esBilboDelDia) return;
@@ -422,7 +445,18 @@ export const EjercicioCard = ({
     if (!ejercicioSeleccionadoId) return;
     const complejasConDatos = complejas.filter((s) => s.pesoReal != null || s.repeticiones != null);
     try {
-      await registerExercise(usuarioId, fecha, ejercicioSeleccionadoId, [...series, ...complejasConDatos]);
+      await registerExercise(
+        usuarioId,
+        fecha,
+        ejercicioSeleccionadoId,
+        [...series, ...complejasConDatos],
+        {
+          ejercicioEjecutadoId,
+          ejercicioPlanificadoId,
+          orden: ordenSlot,
+          esAdicional: esEjercicioAdicional,
+        }
+      );
       setIsSaved(true);
       setHasChanges(false);
       onSave?.();

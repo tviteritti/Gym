@@ -12,7 +12,13 @@ interface EntrenamientoState {
     usuarioId: string,
     fecha: string,
     ejercicioId: string,
-    series: SerieEjecutada[]
+    series: SerieEjecutada[],
+    meta?: {
+      ejercicioEjecutadoId?: string;
+      ejercicioPlanificadoId?: string;
+      orden?: number;
+      esAdicional?: boolean;
+    }
   ) => Promise<void>;
   loadTodayTraining: (usuarioId: string) => Promise<void>;
   loadTrainingByDate: (usuarioId: string, fecha: string) => Promise<void>;
@@ -69,7 +75,13 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
     usuarioId: string,
     fecha: string,
     ejercicioId: string,
-    series: SerieEjecutada[]
+    series: SerieEjecutada[],
+    meta?: {
+      ejercicioEjecutadoId?: string;
+      ejercicioPlanificadoId?: string;
+      orden?: number;
+      esAdicional?: boolean;
+    }
   ) => {
     set({ loading: true, error: null });
     try {
@@ -83,6 +95,10 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
       await entrenamientoService.registerExerciseExecution({
         entrenamientoId,
         ejercicioId,
+        ejercicioEjecutadoId: meta?.ejercicioEjecutadoId,
+        ejercicioPlanificadoId: meta?.ejercicioPlanificadoId,
+        orden: meta?.orden,
+        esAdicional: meta?.esAdicional,
         series: series.map((s) => ({
           numeroSerie: s.numeroSerie,
           pesoReal: s.pesoReal,

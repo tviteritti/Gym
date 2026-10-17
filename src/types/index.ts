@@ -96,6 +96,13 @@ export interface EjercicioEjecutado {
   id?: string;
   ejercicioId: string;
   ejercicioNombre?: string;
+  /** Slot de la rutina al que pertenece esta carga. */
+  ejercicioPlanificadoId?: string;
+  /** Posición en el día. Sirve si el slot de la rutina se recrea. */
+  orden?: number;
+  /** Agregado en el día, fuera del plan. */
+  esAdicional?: boolean;
+  fechaCreacion?: string;
   seriesEjecutadas: SerieEjecutada[];
 }
 
@@ -191,6 +198,12 @@ export interface RegisterExerciseExecutionRequest {
   entrenamientoId: string;
   ejercicioId: string;
   series: SerieEjecucionRequest[];
+  /** Fila ya guardada de esta aparición. Si viene, se actualiza esa y no se crea otra. */
+  ejercicioEjecutadoId?: string;
+  /** Slot de la rutina. Identifica la aparición aunque el ejercicio se reemplace. */
+  ejercicioPlanificadoId?: string;
+  orden?: number;
+  esAdicional?: boolean;
 }
 
 export interface SerieEjecucionRequest {

@@ -26,9 +26,17 @@ const mapEntrenamientoFromDB = (entrenamientoData: any): Entrenamiento => {
       id: ejEjec.id,
       ejercicioId: ejEjec.ejercicio_id,
       ejercicioNombre: (ejEjec.ejercicios as any)?.nombre || '',
+      ejercicioPlanificadoId: ejEjec.ejercicio_planificado_id || undefined,
+      orden: ejEjec.orden ?? undefined,
+      esAdicional: !!ejEjec.es_adicional,
+      fechaCreacion: ejEjec.fecha_creacion || undefined,
       seriesEjecutadas,
     };
   });
+
+  ejerciciosEjecutados.sort((a, b) =>
+    (a.fechaCreacion || '').localeCompare(b.fechaCreacion || '')
+  );
 
   return {
     id: entrenamientoData.id,
@@ -77,39 +85,82 @@ export const entrenamientoService = {
   async registerExerciseExecution(
     data: RegisterExerciseExecutionRequest
   ): Promise<string> {
-    // Verificar si ya existe un ejercicio ejecutado para este entrenamiento y ejercicio
-    const { data: existingEjEjec } = await supabase
-      .from('ejercicios_ejecutados')
-      .select('id')
-      .eq('entrenamiento_id', data.entrenamientoId)
-      .eq('ejercicio_id', data.ejercicioId)
-      .single();
-
-    let ejercicioEjecutadoId: string;
-
-    if (existingEjEjec) {
-      ejercicioEjecutadoId = existingEjEjec.id;
-      // Eliminar series existentes para reemplazarlas
-      await supabase
+    const reemplazarSeries = async (ejercicioEjecutadoId: string) => {
+      const { error } = await supabase
         .from('series_ejecutadas')
         .delete()
         .eq('ejercicio_ejecutado_id', ejercicioEjecutadoId);
+      if (error) {
+        throw new Error(`Error al actualizar series ejecutadas: ${error.message}`);
+      }
+    };
+
+    let ejercicioEjecutadoId = data.ejercicioEjecutadoId;
+
+    if (!ejercicioEjecutadoId && data.ejercicioPlanificadoId) {
+      const { data: porSlot, error: slotError } = await supabase
+        .from('ejercicios_ejecutados')
+        .select('id')
+        .eq('entrenamiento_id', data.entrenamientoId)
+        .eq('ejercicio_planificado_id', data.ejercicioPlanificadoId)
+        .maybeSingle();
+
+      if (slotError) {
+        throw new Error(`Error al buscar el ejercicio del día: ${slotError.message}`);
+      }
+      ejercicioEjecutadoId = porSlot?.id;
+    }
+
+    if (ejercicioEjecutadoId) {
+      const patch: {
+        ejercicio_id: string;
+        ejercicio_planificado_id?: string;
+        es_adicional?: boolean;
+        orden?: number | null;
+      } = { ejercicio_id: data.ejercicioId };
+      if (data.ejercicioPlanificadoId) {
+        patch.ejercicio_planificado_id = data.ejercicioPlanificadoId;
+      }
+      if (data.orden != null) {
+        patch.orden = data.orden;
+      }
+      if (data.esAdicional !== undefined) {
+        patch.es_adicional = data.esAdicional;
+      }
+
+      const { error: updateError } = await supabase
+        .from('ejercicios_ejecutados')
+        .update(patch)
+        .eq('id', ejercicioEjecutadoId)
+        .eq('entrenamiento_id', data.entrenamientoId);
+
+      if (updateError) {
+        throw new Error(`Error al actualizar ejercicio ejecutado: ${updateError.message}`);
+      }
+
+      await reemplazarSeries(ejercicioEjecutadoId);
     } else {
-      // Crear nuevo ejercicio ejecutado
       const { data: nuevoEjEjec, error: ejError } = await supabase
         .from('ejercicios_ejecutados')
         .insert({
           entrenamiento_id: data.entrenamientoId,
           ejercicio_id: data.ejercicioId,
+          ejercicio_planificado_id: data.ejercicioPlanificadoId ?? null,
+          es_adicional: data.esAdicional ?? false,
+          orden: data.orden ?? null,
         })
         .select('id')
         .single();
 
-      if (ejError) {
-        throw new Error(`Error al registrar ejercicio ejecutado: ${ejError.message}`);
+      if (ejError || !nuevoEjEjec) {
+        throw new Error(`Error al registrar ejercicio ejecutado: ${ejError?.message ?? 'sin id'}`);
       }
 
       ejercicioEjecutadoId = nuevoEjEjec.id;
+    }
+
+    if (!ejercicioEjecutadoId) {
+      throw new Error('Error al registrar ejercicio ejecutado: sin id');
     }
 
     // Insertar las series ejecutadas
