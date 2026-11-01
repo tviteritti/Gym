@@ -359,7 +359,8 @@ export const EditarRutinaPage = () => {
                           <circle cx="7" cy="11.5" r="1.2" />
                         </svg>
                       </span>
-                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
                       <div className="flex-1 min-w-[180px]">
                         <label className="sr-only">Ejercicio</label>
                         <ExerciseSelect
@@ -388,19 +389,6 @@ export const EditarRutinaPage = () => {
                           required
                         />
                       </div>
-                      <VariantesCampos
-                        ejercicio={ejInfo}
-                        agarre={ejercicio.agarre}
-                        postura={ejercicio.postura}
-                        accesorio={ejercicio.accesorio}
-                        altura={ejercicio.altura}
-                        unilateral={ejercicio.unilateral}
-                        onAgarre={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "agarre", valor)}
-                        onPostura={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "postura", valor)}
-                        onAccesorio={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "accesorio", valor)}
-                        onAltura={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "altura", valor)}
-                        onUnilateral={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "unilateral", valor)}
-                      />
                       <div className="w-14 shrink-0">
                         <label className="sr-only">Series</label>
                         <input
@@ -480,6 +468,20 @@ export const EditarRutinaPage = () => {
                       >
                         ×
                       </Button>
+                      </div>
+                      <VariantesCampos
+                        ejercicio={ejInfo}
+                        agarre={ejercicio.agarre}
+                        postura={ejercicio.postura}
+                        accesorio={ejercicio.accesorio}
+                        altura={ejercicio.altura}
+                        unilateral={ejercicio.unilateral}
+                        onAgarre={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "agarre", valor)}
+                        onPostura={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "postura", valor)}
+                        onAccesorio={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "accesorio", valor)}
+                        onAltura={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "altura", valor)}
+                        onUnilateral={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "unilateral", valor)}
+                      />
                       </div>
                     </div>
                   )
