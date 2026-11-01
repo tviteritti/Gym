@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { NumberInput } from '../components/ui/NumberInput';
 import { parseDecimal } from '../utils/formatters';
+import { varianteBilboDe } from '../constants/variantes';
 import type { Ejercicio, EjercicioMetodoBilbo } from '../types';
 
 export const ConfigurarBilboPage = () => {
@@ -90,14 +91,14 @@ export const ConfigurarBilboPage = () => {
     }
   };
 
-  const handleDelete = async (ejercicioId: string) => {
+  const handleDelete = async (ejercicioBilbo: EjercicioMetodoBilbo) => {
     if (!usuario) return;
     if (!confirm('¿Estás seguro de que quieres eliminar este ejercicio del método Bilbo?')) {
       return;
     }
 
     try {
-      await bilboService.delete(usuario.id, ejercicioId);
+      await bilboService.delete(usuario.id, ejercicioBilbo.ejercicioId, ejercicioBilbo.agarre, varianteBilboDe(ejercicioBilbo));
       await loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error al eliminar ejercicio');
@@ -105,7 +106,7 @@ export const ConfigurarBilboPage = () => {
   };
 
   const startEdit = (ejercicioBilbo: EjercicioMetodoBilbo) => {
-    setEditingId(ejercicioBilbo.ejercicioId);
+    setEditingId(ejercicioBilbo.id);
     setEditPesoInicial(ejercicioBilbo.pesoInicial);
     setEditIncremento(ejercicioBilbo.incremento);
     setError('');
@@ -117,7 +118,7 @@ export const ConfigurarBilboPage = () => {
     setEditIncremento(2.5);
   };
 
-  const handleUpdate = async (ejercicioId: string) => {
+  const handleUpdate = async (ejercicioBilbo: EjercicioMetodoBilbo) => {
     if (!usuario || editPesoInicial <= 0 || editIncremento <= 0) {
       setError('Por favor completa todos los campos correctamente');
       return;
@@ -127,10 +128,10 @@ export const ConfigurarBilboPage = () => {
     setError('');
 
     try {
-      await bilboService.update(usuario.id, ejercicioId, {
+      await bilboService.update(usuario.id, ejercicioBilbo.ejercicioId, {
         pesoInicial: editPesoInicial,
         incremento: editIncremento,
-      });
+      }, ejercicioBilbo.agarre, varianteBilboDe(ejercicioBilbo));
       cancelEdit();
       await loadData();
     } catch (err) {
@@ -249,7 +250,7 @@ export const ConfigurarBilboPage = () => {
                     key={ejercicioBilbo.id}
                     className="p-4 bg-dark-surface rounded-lg border border-dark-border"
                   >
-                    {editingId === ejercicioBilbo.ejercicioId ? (
+                    {editingId === ejercicioBilbo.id ? (
                       <div className="space-y-4">
                         <h3 className="text-lg font-bold text-dark-text">
                           {ejercicioBilbo.ejercicioNombre}
@@ -286,7 +287,7 @@ export const ConfigurarBilboPage = () => {
                         )}
                         <div className="flex gap-2">
                           <Button
-                            onClick={() => handleUpdate(ejercicioBilbo.ejercicioId)}
+                            onClick={() => handleUpdate(ejercicioBilbo)}
                             disabled={saving}
                             size="sm"
                           >
@@ -329,7 +330,7 @@ export const ConfigurarBilboPage = () => {
                           <Button
                             variant="danger"
                             size="sm"
-                            onClick={() => handleDelete(ejercicioBilbo.ejercicioId)}
+                            onClick={() => handleDelete(ejercicioBilbo)}
                           >
                             Eliminar
                           </Button>

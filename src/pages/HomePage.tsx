@@ -12,6 +12,7 @@ import { DaySelector } from '../components/features/DaySelector';
 import { EjercicioCard } from '../components/features/EjercicioCard';
 import { formatDiaSemana, getDiaSemanaFromDate, getDateForDayOfWeek } from '../utils/formatters';
 import { armarSlotsEntrenamiento } from '../utils/slotsEntrenamiento';
+import { aparicionesDeSlots } from '../utils/ultimaSesion';
 import type {
   Rutina,
   Ejercicio,
@@ -19,17 +20,34 @@ import type {
   EjercicioEjecutado,
   TipoAgrupacion,
   UltimaSesionEjercicio,
+  Maquina,
 } from '../types';
+
+function varianteSlot(s: { ejercicio: EjercicioPlanificado; ejecutado?: EjercicioEjecutado }) {
+  return {
+    id: s.ejercicio.id,
+    ejercicioId: s.ejercicio.ejercicioId,
+    orden: s.ejercicio.orden,
+    agarre: s.ejecutado?.agarre ?? s.ejercicio.agarre,
+    postura: s.ejecutado?.postura ?? s.ejercicio.postura,
+    accesorio: s.ejecutado?.accesorio ?? s.ejercicio.accesorio,
+    altura: s.ejecutado?.altura ?? s.ejercicio.altura,
+    unilateral: s.ejecutado?.unilateral ?? s.ejercicio.unilateral,
+    maquinaId: s.ejecutado?.maquinaId,
+  };
+}
 
 export const HomePage = () => {
   const { usuario } = useAuthStore();
   const { entrenamiento, loadTrainingByDate, clearEntrenamiento } = useEntrenamientoStore();
   const [rutina, setRutina] = useState<Rutina | null>(null);
   const [ejercicios, setEjercicios] = useState<Ejercicio[]>([]);
+  const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [ejerciciosNuevos, setEjerciciosNuevos] = useState<EjercicioPlanificado[]>([]);
   const [selectedDay, setSelectedDay] = useState(getDiaSemanaFromDate(new Date()));
   const [weekOffset, setWeekOffset] = useState(0); // 0 = esta semana, 1 = semana siguiente
   const [loading, setLoading] = useState(true);
+  const [ejercicioResaltadoId, setEjercicioResaltadoId] = useState<string | null>(null);
   const [ultimaSesionMap, setUltimaSesionMap] = useState<Record<
     string,
     UltimaSesionEjercicio | null
@@ -42,6 +60,8 @@ export const HomePage = () => {
     try {
       const data = await ejercicioService.getAll();
       setEjercicios(data);
+      const maquinasData = await ejercicioService.getMaquinas();
+      setMaquinas(maquinasData);
     } catch (error) {
       console.error('Error al cargar ejercicios:', error);
     }
@@ -118,9 +138,14 @@ export const HomePage = () => {
 
     const diaDR = rutina.diasDeRutina.find((d) => d.diaSemana === selectedDay);
     const planned = diaDR?.ejerciciosPlanificados ?? [];
-    const idsExecuted = (entrenamiento?.ejerciciosEjecutados ?? []).map((ee) => ee.ejercicioId);
-    const idsNuevos = ejerciciosNuevos.map((e) => e.ejercicioId);
-    const allIds = [...new Set([...planned.map((p) => p.ejercicioId), ...idsExecuted, ...idsNuevos])];
+    const slotsPrevios = armarSlotsEntrenamiento(
+      planned,
+      entrenamiento?.ejerciciosEjecutados ?? [],
+      ejerciciosNuevos
+    );
+    const apariciones = aparicionesDeSlots(
+      slotsPrevios.map((s) => varianteSlot(s))
+    );
     const fechaSel = getDateForDayOfWeek(selectedDay, weekOffset);
 
     let cancelled = false;
@@ -128,15 +153,15 @@ export const HomePage = () => {
 
     (async () => {
       try {
-        if (allIds.length === 0) {
+        if (apariciones.length === 0) {
           if (cancelled) return;
           setUltimaSesionMap({});
           return;
         }
 
-        const map = await entrenamientoService.getUltimasSesionesMap(
+        const map = await entrenamientoService.getUltimasSesionesPorAparicion(
           usuario.id,
-          allIds,
+          apariciones,
           fechaSel
         );
         if (cancelled) return;
@@ -164,6 +189,11 @@ export const HomePage = () => {
   );
   const slotPorId = new Map(slots.map((s) => [s.ejercicio.id, s]));
   const todosLosEjercicios = slots.map((s) => s.ejercicio);
+  const indicePorSlot = new Map(
+    aparicionesDeSlots(
+      slots.map((s) => varianteSlot(s))
+    ).map((a) => [a.slotId, a.indice] as const)
+  );
   
   // Verificar si hay algún entrenamiento para el día seleccionado (basado en si tiene ejercicios ejecutados)
   const tieneDatos = entrenamiento && entrenamiento.ejerciciosEjecutados.length > 0;
@@ -181,7 +211,17 @@ export const HomePage = () => {
     };
     
     setEjerciciosNuevos((prev) => [...prev, nuevoEjercicio]);
+    setEjercicioResaltadoId(nuevoEjercicio.id);
   };
+
+  useEffect(() => {
+    if (!ejercicioResaltadoId) return;
+    const el = document.getElementById(`ejercicio-slot-${ejercicioResaltadoId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timer = window.setTimeout(() => setEjercicioResaltadoId(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [ejercicioResaltadoId, todosLosEjercicios.length]);
 
   const handleEliminarEjercicioNuevo = (ejercicioId: string) => {
     setEjerciciosNuevos((prev) => prev.filter(e => e.id !== ejercicioId));
@@ -409,7 +449,11 @@ export const HomePage = () => {
                             const esNuevo = !!slot?.esNuevo;
                             const esAdicional = !!slot?.esAdicional;
                             return (
-                              <div key={`${selectedDay}-${ejercicio.id}`}>
+                              <div
+                                id={`ejercicio-slot-${ejercicio.id}`}
+                                key={`${selectedDay}-${ejercicio.id}`}
+                                className={ejercicioResaltadoId === ejercicio.id ? 'rounded-2xl ring-2 ring-violet-400' : undefined}
+                              >
                                 <EjercicioCard
                                   ejercicio={ejercicio}
                                   seriesEjecutadas={ejercicioEjecutado?.seriesEjecutadas}
@@ -423,7 +467,15 @@ export const HomePage = () => {
                                   ejercicioPlanificadoId={slot?.ejercicioPlanificadoId}
                                   ordenSlot={slot?.ejercicioPlanificadoId ? ejercicio.orden : undefined}
                                   esBilboEnRutina={!!ejercicio.esBilbo}
-                                  ultimaSesionPorEjercicioId={ultimaSesionMap}
+                                  maquinas={maquinas}
+                                  maquinaIdInicial={ejercicioEjecutado?.maquinaId}
+                                  agarreInicial={ejercicioEjecutado?.agarre ?? ejercicio.agarre}
+                                  posturaInicial={ejercicioEjecutado?.postura ?? ejercicio.postura}
+                                  accesorioInicial={ejercicioEjecutado?.accesorio ?? ejercicio.accesorio}
+                                  alturaInicial={ejercicioEjecutado?.altura ?? ejercicio.altura}
+                                  unilateralInicial={ejercicioEjecutado?.unilateral ?? ejercicio.unilateral}
+                                  indiceAparicion={indicePorSlot.get(ejercicio.id) ?? 0}
+                                  ultimaSesionPorSlotId={ultimaSesionMap}
                                   onDelete={
                                     esNuevo
                                       ? () => handleEliminarEjercicioNuevo(ejercicio.id)
@@ -455,8 +507,9 @@ export const HomePage = () => {
                       const esAdicional = !!slot?.esAdicional;
                       return (
                         <div 
+                          id={`ejercicio-slot-${ejercicio.id}`}
                           key={`${selectedDay}-${ejercicio.id}`}
-                          className="animate-fade-in"
+                          className={`animate-fade-in ${ejercicioResaltadoId === ejercicio.id ? 'rounded-2xl ring-2 ring-violet-400' : ''}`}
                           style={{ animationDelay: `${currentIndex * 100}ms` }}
                         >
                           <EjercicioCard
@@ -472,7 +525,15 @@ export const HomePage = () => {
                             ejercicioPlanificadoId={slot?.ejercicioPlanificadoId}
                             ordenSlot={slot?.ejercicioPlanificadoId ? ejercicio.orden : undefined}
                             esBilboEnRutina={!!ejercicio.esBilbo}
-                            ultimaSesionPorEjercicioId={ultimaSesionMap}
+                            maquinas={maquinas}
+                            maquinaIdInicial={ejercicioEjecutado?.maquinaId}
+                            agarreInicial={ejercicioEjecutado?.agarre ?? ejercicio.agarre}
+                            posturaInicial={ejercicioEjecutado?.postura ?? ejercicio.postura}
+                            accesorioInicial={ejercicioEjecutado?.accesorio ?? ejercicio.accesorio}
+                            alturaInicial={ejercicioEjecutado?.altura ?? ejercicio.altura}
+                            unilateralInicial={ejercicioEjecutado?.unilateral ?? ejercicio.unilateral}
+                            indiceAparicion={indicePorSlot.get(ejercicio.id) ?? 0}
+                            ultimaSesionPorSlotId={ultimaSesionMap}
                             onDelete={
                               esNuevo
                                 ? () => handleEliminarEjercicioNuevo(ejercicio.id)

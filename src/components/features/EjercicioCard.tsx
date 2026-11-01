@@ -10,11 +10,16 @@ import type {
   EjercicioMetodoBilbo,
   ProgresoMetodoBilbo,
   UltimaSesionEjercicio,
+  Maquina,
 } from '../../types';
 import { useEntrenamientoStore } from '../../store/entrenamientoStore';
 import { bilboService } from '../../services/bilboService';
 import { entrenamientoService } from '../../services/entrenamientoService';
 import { getMuscleColorWithDefault } from '../../constants/muscleColors';
+import { ExerciseSelect } from './ExerciseSelect';
+import { VariantesCampos } from './VariantesCampos';
+import { esAgarre } from '../../constants/agarres';
+import { faltaVariante, grupoMaquinaDe } from '../../constants/variantes';
 import { calcularProximoPesoBilbo } from '../../utils/bilbo';
 import { formatFechaCortaEs, parseDecimal } from '../../utils/formatters';
 import { TECNICAS_INTENSIDAD, seriesTecnica } from '../../utils/tecnicaIntensidad';
@@ -52,8 +57,16 @@ interface EjercicioCardProps {
   ordenSlot?: number;
   /** Si el slot en la rutina está marcado como ejercicio Bilbo (checkbox en editor de rutina). */
   esBilboEnRutina?: boolean;
-  /** null: Home cargando; mapa listo con null si no hay historial previo a la fecha del día */
-  ultimaSesionPorEjercicioId?: Record<string, UltimaSesionEjercicio | null> | null;
+  /** null: Home cargando. Clave = id del slot, para no mezclar dos apariciones del mismo ejercicio. */
+  ultimaSesionPorSlotId?: Record<string, UltimaSesionEjercicio | null> | null;
+  maquinas?: Maquina[];
+  maquinaIdInicial?: string;
+  agarreInicial?: string;
+  posturaInicial?: string;
+  accesorioInicial?: string;
+  alturaInicial?: string;
+  unilateralInicial?: boolean;
+  indiceAparicion?: number;
 }
 
 export const EjercicioCard = ({
@@ -70,7 +83,15 @@ export const EjercicioCard = ({
   ejercicioPlanificadoId,
   ordenSlot,
   esBilboEnRutina = false,
-  ultimaSesionPorEjercicioId,
+  ultimaSesionPorSlotId,
+  maquinas = [],
+  maquinaIdInicial,
+  agarreInicial,
+  posturaInicial,
+  accesorioInicial,
+  alturaInicial,
+  unilateralInicial,
+  indiceAparicion = 0,
 }: EjercicioCardProps) => {
   const [series, setSeries] = useState<SerieEjecutada[]>([]);
   const [complejas, setComplejas] = useState<SerieEjecutada[]>([]);
@@ -88,6 +109,15 @@ export const EjercicioCard = ({
   const [recordPersonal, setRecordPersonal] = useState<{ peso: number; reps: number } | null>(null);
   const [recordPanelAbierto, setRecordPanelAbierto] = useState(false);
   const [recordCargando, setRecordCargando] = useState(false);
+  const [maquinaId, setMaquinaId] = useState<string | undefined>(maquinaIdInicial);
+  const [agarre, setAgarre] = useState<string | undefined>(esAgarre(agarreInicial) ? agarreInicial : undefined);
+  const [postura, setPostura] = useState<string | undefined>(posturaInicial);
+  const [accesorio, setAccesorio] = useState<string | undefined>(accesorioInicial);
+  const [altura, setAltura] = useState<string | undefined>(alturaInicial);
+  const [unilateral, setUnilateral] = useState<boolean | undefined>(unilateralInicial);
+  const [faltaMaquina, setFaltaMaquina] = useState(false);
+  const [errorVariante, setErrorVariante] = useState<string | null>(null);
+  const [ultimaMaquina, setUltimaMaquina] = useState<UltimaSesionEjercicio | null | undefined>(undefined);
 
   const [maxRepsPesoDia, setMaxRepsPesoDia] = useState<{ peso: number; reps: number } | null>(null);
   const [maxRepsPanelAbierto, setMaxRepsPanelAbierto] = useState(false);
@@ -129,15 +159,24 @@ export const EjercicioCard = ({
     return calcularProximoPesoBilbo(ejercicioBilbo, ultimoProgreso);
   }, [esBilboDelDia, ejercicioBilbo, ultimoProgreso]);
 
-  const resumenUltimaDesdeHome =
-    ultimaSesionPorEjercicioId !== undefined && ultimaSesionPorEjercicioId !== null
-      ? Object.prototype.hasOwnProperty.call(ultimaSesionPorEjercicioId, ejercicioSeleccionadoId)
-        ? ultimaSesionPorEjercicioId[ejercicioSeleccionadoId]
-        : undefined
-      : undefined;
+  const esEjercicioDelSlot = ejercicioSeleccionadoId === ejercicio.ejercicioId;
+  const ejercicioActual = ejerciciosDisponibles.find((e) => e.id === ejercicioSeleccionadoId);
+  const grupoEquipo = grupoMaquinaDe(ejercicioActual, accesorio);
+  const maquinasDelGrupo = grupoEquipo ? maquinas.filter((m) => m.grupo === grupoEquipo) : [];
+  const bloqueado = loading || (isSaved && !hasChanges && !isEditMode);
+
+  const resumenUltimaDesdeHome = !esEjercicioDelSlot
+    ? undefined
+    : ultimaSesionPorSlotId == null
+      ? undefined
+      : (ultimaSesionPorSlotId[ejercicio.id] ?? null);
 
   const resumenUltima =
-    resumenUltimaDesdeHome !== undefined ? resumenUltimaDesdeHome : ultimaSesionExtra;
+    ultimaMaquina !== undefined
+      ? ultimaMaquina
+      : esEjercicioDelSlot
+        ? resumenUltimaDesdeHome
+        : ultimaSesionExtra;
 
   const pesoDefaultConsulta = useMemo(() => {
     if (esBilboDelDia && pesoObjetivoBilbo !== null) return pesoObjetivoBilbo;
@@ -163,10 +202,7 @@ export const EjercicioCard = ({
   }, [ejercicioSeleccionadoId, fecha]);
 
   useEffect(() => {
-    if (ultimaSesionPorEjercicioId === null || ultimaSesionPorEjercicioId === undefined) {
-      return;
-    }
-    if (Object.prototype.hasOwnProperty.call(ultimaSesionPorEjercicioId, ejercicioSeleccionadoId)) {
+    if (esEjercicioDelSlot) {
       ultimaSesionExtraFetchIdRef.current = null;
       return;
     }
@@ -192,12 +228,110 @@ export const EjercicioCard = ({
     return () => {
       cancelled = true;
     };
-  }, [usuarioId, ejercicioSeleccionadoId, fecha, ultimaSesionPorEjercicioId]);
+  }, [usuarioId, ejercicioSeleccionadoId, fecha, esEjercicioDelSlot]);
+
+  useEffect(() => {
+    if (ejercicioSeleccionadoId === ejercicio.ejercicioId) {
+      setMaquinaId(maquinaIdInicial);
+      setAgarre(esAgarre(agarreInicial) ? agarreInicial : undefined);
+      setPostura(posturaInicial);
+      setAccesorio(accesorioInicial);
+      setAltura(alturaInicial);
+      setUnilateral(unilateralInicial);
+    } else {
+      setMaquinaId(undefined);
+      setAgarre(undefined);
+      setPostura(undefined);
+      setAccesorio(undefined);
+      setAltura(undefined);
+      setUnilateral(undefined);
+    }
+    setFaltaMaquina(false);
+    setErrorVariante(null);
+  }, [
+    ejercicio.id,
+    ejercicio.ejercicioId,
+    ejercicioSeleccionadoId,
+    maquinaIdInicial,
+    agarreInicial,
+    posturaInicial,
+    accesorioInicial,
+    alturaInicial,
+    unilateralInicial,
+  ]);
+
+  useEffect(() => {
+    const cambioMaquina = !!grupoEquipo && maquinaId !== maquinaIdInicial;
+    const cambioAgarre = agarre !== agarreInicial;
+    const cambioPostura = postura !== posturaInicial;
+    const cambioAccesorio = accesorio !== accesorioInicial;
+    const cambioAltura = altura !== alturaInicial;
+    const cambioUni = unilateral !== unilateralInicial;
+    const falta = faltaVariante(ejercicioActual, { agarre, postura, accesorio, altura, unilateral });
+    if ((!cambioMaquina && !cambioAgarre && !cambioPostura && !cambioAccesorio && !cambioAltura && !cambioUni) || falta) {
+      setUltimaMaquina(undefined);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const map = await entrenamientoService.getUltimasSesionesPorAparicion(
+          usuarioId,
+          [
+            {
+              slotId: ejercicio.id,
+              ejercicioId: ejercicioSeleccionadoId,
+              indice: indiceAparicion,
+              ...(grupoEquipo && maquinaId ? { maquinaId } : {}),
+              ...(agarre ? { agarre } : {}),
+              ...(postura ? { postura } : {}),
+              ...(accesorio ? { accesorio } : {}),
+              ...(altura ? { altura } : {}),
+              ...(unilateral != null ? { unilateral } : {}),
+            },
+          ],
+          fecha
+        );
+        if (!cancelled) setUltimaMaquina(map[ejercicio.id] ?? null);
+      } catch (e) {
+        console.error('Última sesión (máquina):', e);
+        if (!cancelled) setUltimaMaquina(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    grupoEquipo,
+    maquinaId,
+    maquinaIdInicial,
+    agarre,
+    agarreInicial,
+    postura,
+    posturaInicial,
+    accesorio,
+    accesorioInicial,
+    altura,
+    alturaInicial,
+    unilateral,
+    unilateralInicial,
+    usuarioId,
+    ejercicio.id,
+    ejercicioSeleccionadoId,
+    indiceAparicion,
+    fecha,
+  ]);
 
   const cargarRecordPersonalDebajo = useCallback(async () => {
     setRecordCargando(true);
     try {
-      const record = await entrenamientoService.getRecordPersonal(usuarioId, ejercicioSeleccionadoId);
+      const record = await entrenamientoService.getRecordPersonal(
+        usuarioId,
+        ejercicioSeleccionadoId,
+        grupoEquipo ? maquinaId : undefined,
+        agarre,
+        { postura, accesorio, altura, unilateral }
+      );
       setRecordPersonal(record);
     } catch (error) {
       console.error('Error al cargar record personal:', error);
@@ -205,7 +339,7 @@ export const EjercicioCard = ({
     } finally {
       setRecordCargando(false);
     }
-  }, [usuarioId, ejercicioSeleccionadoId]);
+  }, [usuarioId, ejercicioSeleccionadoId, grupoEquipo, maquinaId, agarre, postura, accesorio, altura, unilateral]);
 
   const toggleRecordPanel = () => {
     if (!recordPanelAbierto) {
@@ -227,7 +361,10 @@ export const EjercicioCard = ({
         const r = await entrenamientoService.getMaxRepsEnPesoExacto(
           usuarioId,
           ejercicioSeleccionadoId,
-          peso
+          peso,
+          grupoEquipo ? maquinaId : undefined,
+          agarre,
+          { postura, accesorio, altura, unilateral }
         );
         setMaxRepsPesoDia(r);
       } catch (e) {
@@ -237,7 +374,7 @@ export const EjercicioCard = ({
         setMaxRepsCargando(false);
       }
     },
-    [usuarioId, ejercicioSeleccionadoId]
+    [usuarioId, ejercicioSeleccionadoId, grupoEquipo, maquinaId, agarre, postura, accesorio, altura, unilateral]
   );
 
   const toggleMaxRepsPanel = () => {
@@ -270,6 +407,14 @@ export const EjercicioCard = ({
     );
     setComplejas(construirComplejas(complejasProp, cantidadComplejasPlan));
     setHasChanges(false);
+    setMaquinaId(maquinaIdInicial);
+    setAgarre(esAgarre(agarreInicial) ? agarreInicial : undefined);
+    setPostura(posturaInicial);
+    setAccesorio(accesorioInicial);
+    setAltura(alturaInicial);
+    setUnilateral(unilateralInicial);
+    setFaltaMaquina(false);
+    setErrorVariante(null);
   };
 
   useEffect(() => {
@@ -292,10 +437,11 @@ export const EjercicioCard = ({
 
     const loadBilboInfo = async () => {
       try {
-        const bilbo = await bilboService.getByEjercicio(usuarioId, ejercicioSeleccionadoId);
+        const extra = { accesorio, postura, altura };
+        const bilbo = await bilboService.getByEjercicio(usuarioId, ejercicioSeleccionadoId, agarre, extra);
         setEjercicioBilbo(bilbo);
         if (bilbo) {
-          const progreso = await bilboService.getUltimoProgreso(usuarioId, ejercicioSeleccionadoId);
+          const progreso = await bilboService.getUltimoProgreso(usuarioId, ejercicioSeleccionadoId, agarre, extra);
           setUltimoProgreso(progreso || null);
         } else {
           setUltimoProgreso(null);
@@ -308,7 +454,7 @@ export const EjercicioCard = ({
 
     void loadBilboInfo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ejercicioSeleccionadoId, usuarioId, esBilboEnRutina]);
+  }, [ejercicioSeleccionadoId, usuarioId, esBilboEnRutina, agarre, accesorio, postura, altura]);
 
   useEffect(() => {
     const nuevasComplejas = construirComplejas(complejasProp, cantidadComplejasPlan);
@@ -443,6 +589,17 @@ export const EjercicioCard = ({
 
   const handleSave = async () => {
     if (!ejercicioSeleccionadoId) return;
+    const pedido = faltaVariante(ejercicioActual, { agarre, postura, accesorio, altura, unilateral });
+    if (grupoEquipo && !maquinaId) {
+      setFaltaMaquina(true);
+      return;
+    }
+    if (pedido) {
+      setErrorVariante(pedido);
+      return;
+    }
+    setFaltaMaquina(false);
+    setErrorVariante(null);
     const complejasConDatos = complejas.filter((s) => s.pesoReal != null || s.repeticiones != null);
     try {
       await registerExercise(
@@ -455,6 +612,12 @@ export const EjercicioCard = ({
           ejercicioPlanificadoId,
           orden: ordenSlot,
           esAdicional: esEjercicioAdicional,
+          maquinaId: grupoEquipo ? maquinaId ?? null : null,
+          agarre: agarre ?? null,
+          postura: postura ?? null,
+          accesorio: accesorio ?? null,
+          altura: altura ?? null,
+          unilateral: unilateral ?? null,
         }
       );
       setIsSaved(true);
@@ -492,18 +655,13 @@ export const EjercicioCard = ({
       <div className="mb-3 flex justify-between items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2">
-            <select
+            <ExerciseSelect
+              ejercicios={ejerciciosDisponibles}
               value={ejercicioSeleccionadoId}
-              onChange={(e) => setEjercicioSeleccionadoId(e.target.value)}
-              className="flex-1 min-w-0 mb-2 px-3 py-2 bg-dark-surface border border-dark-border rounded-lg text-dark-text focus:outline-none focus:ring-2 focus:ring-dark-accent"
-              disabled={loading || (isSaved && !hasChanges && !isEditMode)}
-            >
-              {ejerciciosDisponibles.map((ej) => (
-                <option key={ej.id} value={ej.id}>
-                  {ej.nombre}
-                </option>
-              ))}
-            </select>
+              onChange={setEjercicioSeleccionadoId}
+              disabled={bloqueado}
+              className="min-w-0 flex-1 mb-2"
+            />
             <button
               type="button"
               title="Ver récord personal"
@@ -548,6 +706,88 @@ export const EjercicioCard = ({
               </span>
             )}
           </div>
+          <VariantesCampos
+            ejercicio={ejercicioActual}
+            agarre={agarre}
+            postura={postura}
+            accesorio={accesorio}
+            altura={altura}
+            unilateral={unilateral}
+            disabled={bloqueado}
+            error={errorVariante}
+            onAgarre={(siguiente) => {
+              if (siguiente === agarre) return;
+              setAgarre(siguiente);
+              setErrorVariante(null);
+              setHasChanges(true);
+              setIsSaved(false);
+            }}
+            onPostura={(siguiente) => {
+              if (siguiente === postura) return;
+              setPostura(siguiente);
+              setErrorVariante(null);
+              setHasChanges(true);
+              setIsSaved(false);
+            }}
+            onAccesorio={(siguiente) => {
+              if (siguiente === accesorio) return;
+              setAccesorio(siguiente);
+              if (!grupoMaquinaDe(ejercicioActual, siguiente)) setMaquinaId(undefined);
+              setErrorVariante(null);
+              setHasChanges(true);
+              setIsSaved(false);
+            }}
+            onAltura={(siguiente) => {
+              if (siguiente === altura) return;
+              setAltura(siguiente);
+              setErrorVariante(null);
+              setHasChanges(true);
+              setIsSaved(false);
+            }}
+            onUnilateral={(siguiente) => {
+              if (siguiente === unilateral) return;
+              setUnilateral(siguiente);
+              setErrorVariante(null);
+              setHasChanges(true);
+              setIsSaved(false);
+            }}
+          />
+          {maquinasDelGrupo.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs font-semibold text-dark-text-muted uppercase tracking-wide mb-1.5">
+                Máquina
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {maquinasDelGrupo.map((m) => {
+                  const activa = maquinaId === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      disabled={bloqueado}
+                      onClick={() => {
+                        if (m.id === maquinaId) return;
+                        setMaquinaId(m.id);
+                        setFaltaMaquina(false);
+                        setHasChanges(true);
+                        setIsSaved(false);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs border transition-colors disabled:opacity-50 ${
+                        activa
+                          ? 'border-violet-400 bg-violet-500/25 text-violet-100'
+                          : 'border-dark-border text-dark-text-muted hover:border-violet-400/60'
+                      }`}
+                    >
+                      {m.nombre}
+                    </button>
+                  );
+                })}
+              </div>
+              {faltaMaquina && (
+                <p className="mt-1 text-xs text-red-400">Elegí la máquina para guardar.</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -641,17 +881,29 @@ export const EjercicioCard = ({
         <p className="text-xs font-semibold text-dark-text-muted uppercase tracking-wide mb-1.5">
           Última vez
         </p>
-        {ultimaSesionPorEjercicioId === null ? (
+        {esEjercicioDelSlot && ultimaSesionPorSlotId === null ? (
           <p className="text-sm text-dark-text-muted">Cargando historial…</p>
         ) : resumenUltima === undefined ? (
           <p className="text-sm text-dark-text-muted">Cargando…</p>
         ) : resumenUltima === null || resumenUltima.series.length === 0 ? (
           <p className="text-sm text-dark-text-muted">
-            Sin entrenamientos previos para este ejercicio.
+            {accesorio || postura || altura || agarre
+              ? 'Sin entrenamientos previos con esta variante.'
+              : grupoEquipo && maquinaId
+              ? 'Sin entrenamientos previos en esta máquina.'
+              : 'Sin entrenamientos previos para este ejercicio.'}
           </p>
         ) : (
           <>
-            <p className="text-sm text-dark-text mb-2">{formatFechaCortaEs(resumenUltima.fecha)}</p>
+            <p className="text-sm text-dark-text mb-2">
+              {formatFechaCortaEs(resumenUltima.fecha)}
+              {resumenUltima.sinAgarre ? ' · sin agarre cargado' : ''}
+              {resumenUltima.sinPostura ? ' · sin postura cargada' : ''}
+              {resumenUltima.sinAccesorio ? ' · sin accesorio cargado' : ''}
+              {resumenUltima.sinAltura ? ' · sin altura cargada' : ''}
+              {resumenUltima.sinUnilateral ? ' · sin unilateral cargado' : ''}
+              {resumenUltima.sinMaquina ? ' · sin máquina cargada' : ''}
+            </p>
             <ul className="space-y-1 text-sm text-dark-text">
               {resumenUltima.series.map((s) => (
                 <li

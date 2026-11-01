@@ -1,10 +1,40 @@
 import { supabase } from '../config/supabase';
+import { esAgarre, ETIQUETA_AGARRE, type Agarre } from '../constants/agarres';
+import { ETIQUETA_ACCESORIO, ETIQUETA_POSTURA } from '../constants/variantes';
 import type {
   EjercicioMetodoBilbo,
   ProgresoMetodoBilbo,
   CreateEjercicioMetodoBilboRequest,
   UpdateEjercicioMetodoBilboRequest,
 } from '../types';
+
+export interface VarianteBilbo {
+  accesorio?: string | null;
+  postura?: string | null;
+  altura?: string | null;
+}
+
+function conVariante<Q extends { eq: (c: string, v: string) => Q; is: (c: string, v: null) => Q }>(
+  query: Q,
+  extra?: VarianteBilbo,
+  estricto = false
+): Q {
+  if (!extra) return query;
+  for (const col of ['accesorio', 'postura', 'altura'] as const) {
+    const val = extra[col];
+    if (val) query = query.eq(col, val);
+    else if (estricto) query = query.is(col, null);
+  }
+  return query;
+}
+
+function sufijoBilbo(item: { agarre?: string; accesorio?: string; postura?: string }, agarre?: Agarre): string | undefined {
+  const partes: string[] = [];
+  if (item.accesorio) partes.push(ETIQUETA_ACCESORIO[item.accesorio] ?? item.accesorio);
+  if (item.postura) partes.push(ETIQUETA_POSTURA[item.postura] ?? item.postura);
+  if (agarre) partes.push(ETIQUETA_AGARRE[agarre]);
+  return partes.length ? partes.join(' · ') : undefined;
+}
 
 export const bilboService = {
   // Obtener todos los ejercicios del método Bilbo para un usuario
@@ -22,28 +52,44 @@ export const bilboService = {
       throw new Error(`Error al obtener ejercicios del método Bilbo: ${error.message}`);
     }
 
-    return (data || []).map((item: any) => ({
+    return (data || []).map((item: any) => {
+      const agarre: Agarre | undefined = esAgarre(item.agarre) ? item.agarre : undefined;
+      const nombre = item.ejercicios?.nombre as string | undefined;
+      const detalle = sufijoBilbo(item, agarre);
+      return {
       id: item.id,
       ejercicioId: item.ejercicio_id,
-      ejercicioNombre: item.ejercicios?.nombre,
+      ejercicioNombre: nombre && detalle ? `${nombre} · ${detalle}` : nombre,
       usuarioId: item.usuario_id,
       pesoInicial: parseFloat(item.peso_inicial.toString()),
       incremento: parseFloat(item.incremento.toString()),
       fechaCreacion: item.fecha_creacion,
-    }));
+      agarre,
+      accesorio: item.accesorio || undefined,
+      postura: item.postura || undefined,
+      altura: item.altura || undefined,
+    };
+    });
   },
 
   // Obtener configuración de un ejercicio específico del método Bilbo
-  async getByEjercicio(usuarioId: string, ejercicioId: string): Promise<EjercicioMetodoBilbo | null> {
-    const { data, error } = await supabase
+  async getByEjercicio(
+    usuarioId: string,
+    ejercicioId: string,
+    agarre?: string | null,
+    extra?: VarianteBilbo
+  ): Promise<EjercicioMetodoBilbo | null> {
+    let query = supabase
       .from('ejercicios_metodo_bilbo')
       .select(`
         *,
         ejercicios:ejercicio_id(id, nombre)
       `)
       .eq('usuario_id', usuarioId)
-      .eq('ejercicio_id', ejercicioId)
-      .maybeSingle();
+      .eq('ejercicio_id', ejercicioId);
+    if (agarre) query = query.eq('agarre', agarre);
+    query = conVariante(query, extra);
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
       throw new Error(`Error al obtener ejercicio del método Bilbo: ${error.message}`);
@@ -61,6 +107,10 @@ export const bilboService = {
       pesoInicial: parseFloat(data.peso_inicial.toString()),
       incremento: parseFloat(data.incremento.toString()),
       fechaCreacion: data.fecha_creacion,
+      agarre: esAgarre(data.agarre) ? data.agarre : undefined,
+      accesorio: data.accesorio || undefined,
+      postura: data.postura || undefined,
+      altura: data.altura || undefined,
     };
   },
 
@@ -85,7 +135,13 @@ export const bilboService = {
   },
 
   // Actualizar configuración de ejercicio del método Bilbo
-  async update(usuarioId: string, ejercicioId: string, data: UpdateEjercicioMetodoBilboRequest): Promise<void> {
+  async update(
+    usuarioId: string,
+    ejercicioId: string,
+    data: UpdateEjercicioMetodoBilboRequest,
+    agarre?: string | null,
+    extra?: VarianteBilbo
+  ): Promise<void> {
     const updateData: any = {};
     if (data.pesoInicial !== undefined) {
       updateData.peso_inicial = data.pesoInicial;
@@ -94,11 +150,14 @@ export const bilboService = {
       updateData.incremento = data.incremento;
     }
 
-    const { error } = await supabase
+    let query = supabase
       .from('ejercicios_metodo_bilbo')
       .update(updateData)
       .eq('usuario_id', usuarioId)
       .eq('ejercicio_id', ejercicioId);
+    query = agarre ? query.eq('agarre', agarre) : query.is('agarre', null);
+    query = conVariante(query, extra, true);
+    const { error } = await query;
 
     if (error) {
       throw new Error(`Error al actualizar ejercicio del método Bilbo: ${error.message}`);
@@ -106,12 +165,15 @@ export const bilboService = {
   },
 
   // Eliminar configuración de ejercicio del método Bilbo
-  async delete(usuarioId: string, ejercicioId: string): Promise<void> {
-    const { error } = await supabase
+  async delete(usuarioId: string, ejercicioId: string, agarre?: string | null, extra?: VarianteBilbo): Promise<void> {
+    let query = supabase
       .from('ejercicios_metodo_bilbo')
       .delete()
       .eq('usuario_id', usuarioId)
       .eq('ejercicio_id', ejercicioId);
+    query = agarre ? query.eq('agarre', agarre) : query.is('agarre', null);
+    query = conVariante(query, extra, true);
+    const { error } = await query;
 
     if (error) {
       throw new Error(`Error al eliminar ejercicio del método Bilbo: ${error.message}`);
@@ -119,15 +181,23 @@ export const bilboService = {
   },
 
   // Obtener el último progreso de un ejercicio del método Bilbo
-  async getUltimoProgreso(usuarioId: string, ejercicioId: string): Promise<ProgresoMetodoBilbo | null> {
-    const { data, error } = await supabase
+  async getUltimoProgreso(
+    usuarioId: string,
+    ejercicioId: string,
+    agarre?: string | null,
+    extra?: VarianteBilbo
+  ): Promise<ProgresoMetodoBilbo | null> {
+    let query = supabase
       .from('progreso_metodo_bilbo')
       .select(`
         *,
         ejercicios:ejercicio_id(id, nombre)
       `)
       .eq('usuario_id', usuarioId)
-      .eq('ejercicio_id', ejercicioId)
+      .eq('ejercicio_id', ejercicioId);
+    if (agarre) query = query.eq('agarre', agarre);
+    query = conVariante(query, extra);
+    const { data, error } = await query
       .order('fecha', { ascending: false })
       .order('fecha_creacion', { ascending: false })
       .limit(1)
@@ -161,7 +231,9 @@ export const bilboService = {
     entrenamientoId: string,
     pesoActual: number,
     repeticiones: number,
-    fecha: string
+    fecha: string,
+    agarre?: string | null,
+    extra?: VarianteBilbo
   ): Promise<string> {
     const { data, error } = await supabase
       .from('progreso_metodo_bilbo')
@@ -172,6 +244,10 @@ export const bilboService = {
         peso_actual: pesoActual,
         repeticiones: repeticiones,
         fecha: fecha,
+        agarre: agarre || null,
+        accesorio: extra?.accesorio || null,
+        postura: extra?.postura || null,
+        altura: extra?.altura || null,
       })
       .select('id')
       .single();
@@ -189,7 +265,9 @@ export const bilboService = {
     ejercicioId: string,
     pesoActual: number,
     repeticiones: number,
-    fecha: string
+    fecha: string,
+    agarre?: string | null,
+    extra?: VarianteBilbo
   ): Promise<string> {
     // Importar entrenamientoService dinámicamente para evitar dependencia circular
     const { entrenamientoService } = await import('./entrenamientoService');
@@ -207,7 +285,9 @@ export const bilboService = {
       entrenamientoId,
       pesoActual,
       repeticiones,
-      fecha
+      fecha,
+      agarre,
+      extra
     );
   },
 
@@ -216,13 +296,13 @@ export const bilboService = {
    * Inserta un registro con 0 reps en el último peso alcanzado (>=15),
    * de modo que el próximo peso vuelva a ser el peso inicial.
    */
-  async reiniciarCiclo(usuarioId: string, ejercicioId: string): Promise<string> {
-    const bilbo = await this.getByEjercicio(usuarioId, ejercicioId);
+  async reiniciarCiclo(usuarioId: string, ejercicioId: string, agarre?: string | null, extra?: VarianteBilbo): Promise<string> {
+    const bilbo = await this.getByEjercicio(usuarioId, ejercicioId, agarre, extra);
     if (!bilbo) {
       throw new Error('El ejercicio no está configurado para el método Bilbo');
     }
 
-    const ultimoProgreso = await this.getUltimoProgreso(usuarioId, ejercicioId);
+    const ultimoProgreso = await this.getUltimoProgreso(usuarioId, ejercicioId, agarre, extra);
     if (!ultimoProgreso || ultimoProgreso.repeticiones < 15) {
       throw new Error('El próximo peso ya es el peso inicial; no hay nada que reiniciar');
     }
@@ -233,20 +313,30 @@ export const bilboService = {
       ejercicioId,
       ultimoProgreso.pesoActual,
       0,
-      hoy
+      hoy,
+      agarre,
+      extra
     );
   },
 
   // Obtener historial de progreso de un ejercicio
-  async getHistorialProgreso(usuarioId: string, ejercicioId: string): Promise<ProgresoMetodoBilbo[]> {
-    const { data, error } = await supabase
+  async getHistorialProgreso(
+    usuarioId: string,
+    ejercicioId: string,
+    agarre?: string | null,
+    extra?: VarianteBilbo
+  ): Promise<ProgresoMetodoBilbo[]> {
+    let query = supabase
       .from('progreso_metodo_bilbo')
       .select(`
         *,
         ejercicios:ejercicio_id(id, nombre)
       `)
       .eq('usuario_id', usuarioId)
-      .eq('ejercicio_id', ejercicioId)
+      .eq('ejercicio_id', ejercicioId);
+    if (agarre) query = query.eq('agarre', agarre);
+    query = conVariante(query, extra);
+    const { data, error } = await query
       .order('fecha', { ascending: false })
       .order('fecha_creacion', { ascending: false });
 

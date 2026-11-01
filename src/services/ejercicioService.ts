@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
-import type { CreateExerciseRequest, HistorialEjercicio, Ejercicio, EjecucionEjercicio, RecordPorEjercicio } from '../types';
+import { esAgarre } from '../constants/agarres';
+import type { CreateExerciseRequest, HistorialEjercicio, Ejercicio, EjecucionEjercicio, RecordPorEjercicio, Maquina } from '../types';
 
 export const ejercicioService = {
   async getAll(): Promise<Ejercicio[]> {
@@ -86,8 +87,34 @@ export const ejercicioService = {
         musculosSecundarios: musculosSecundariosNombres,
         descripcion: ej.descripcion || undefined,
         fechaCreacion: ej.fecha_creacion,
+        grupoEquipo: ej.grupo_equipo === 'dorsalera' || ej.grupo_equipo === 'polea' ? ej.grupo_equipo : undefined,
+        usaAgarre: !!ej.usa_agarre,
+        agarres: Array.isArray(ej.agarres) ? ej.agarres.filter(esAgarre) : undefined,
+        usaPostura: !!ej.usa_postura,
+        usaAltura: !!ej.usa_altura,
+        usaUnilateral: !!ej.usa_unilateral,
+        accesorios: Array.isArray(ej.accesorios) ? ej.accesorios : undefined,
+        maquinaSi: Array.isArray(ej.maquina_si) ? ej.maquina_si : undefined,
       };
     });
+  },
+
+  async getMaquinas(): Promise<Maquina[]> {
+    const { data, error } = await supabase
+      .from('maquinas')
+      .select('id, nombre, grupo, orden')
+      .order('orden', { ascending: true });
+
+    if (error) {
+      throw new Error(`Error al obtener máquinas: ${error.message}`);
+    }
+
+    return (data || []).map((m) => ({
+      id: m.id,
+      nombre: m.nombre,
+      grupo: m.grupo,
+      orden: m.orden,
+    }));
   },
 
   async create(data: CreateExerciseRequest): Promise<string> {

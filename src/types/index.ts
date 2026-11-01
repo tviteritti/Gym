@@ -1,3 +1,5 @@
+import type { Agarre } from '../constants/agarres';
+
 // Enums - Using const object instead of enum for erasableSyntaxOnly compatibility
 export const DiaSemana = {
   Monday: 1,
@@ -24,6 +26,15 @@ export interface Musculo {
   fechaCreacion: string;
 }
 
+export type GrupoEquipo = 'dorsalera' | 'polea';
+
+export interface Maquina {
+  id: string;
+  nombre: string;
+  grupo: GrupoEquipo;
+  orden: number;
+}
+
 export interface Ejercicio {
   id: string;
   nombre: string;
@@ -31,6 +42,18 @@ export interface Ejercicio {
   musculosSecundarios?: string;
   descripcion?: string;
   fechaCreacion: string;
+  /** Si el peso depende de la máquina: dorsalera o polea. */
+  grupoEquipo?: GrupoEquipo;
+  /** El mismo ejercicio se trackea aparte por agarre. */
+  usaAgarre?: boolean;
+  /** Si está, el selector de agarre muestra solo estos. */
+  agarres?: Agarre[];
+  usaPostura?: boolean;
+  usaAltura?: boolean;
+  usaUnilateral?: boolean;
+  accesorios?: string[];
+  /** Accesorios que usan las poleas. */
+  maquinaSi?: string[];
 }
 
 export interface SeriePlanificada {
@@ -57,6 +80,11 @@ export interface EjercicioPlanificado {
   tecnicaIntensidad?: TecnicaIntensidad;
   /** Cantidad de series extra de la técnica */
   tecnicaSeries?: number;
+  agarre?: string;
+  postura?: string;
+  accesorio?: string;
+  altura?: string;
+  unilateral?: boolean;
   seriesPlanificadas: SeriePlanificada[];
 }
 
@@ -90,6 +118,14 @@ export interface SerieEjecutada {
 export interface UltimaSesionEjercicio {
   fecha: string;
   series: { numeroSerie: number; pesoReal?: number; repeticiones?: number; esCompleja?: boolean }[];
+  /** La sesión es anterior a elegir máquina. */
+  sinMaquina?: boolean;
+  /** La sesión es anterior a elegir agarre. */
+  sinAgarre?: boolean;
+  sinPostura?: boolean;
+  sinAccesorio?: boolean;
+  sinAltura?: boolean;
+  sinUnilateral?: boolean;
 }
 
 export interface EjercicioEjecutado {
@@ -103,6 +139,12 @@ export interface EjercicioEjecutado {
   /** Agregado en el día, fuera del plan. */
   esAdicional?: boolean;
   fechaCreacion?: string;
+  maquinaId?: string;
+  agarre?: string;
+  postura?: string;
+  accesorio?: string;
+  altura?: string;
+  unilateral?: boolean;
   seriesEjecutadas: SerieEjecutada[];
 }
 
@@ -177,6 +219,11 @@ export interface EjercicioRutinaRequest {
   grupoAgrupacion?: number;
   tecnicaIntensidad?: TecnicaIntensidad;
   tecnicaSeries?: number;
+  agarre?: string;
+  postura?: string;
+  accesorio?: string;
+  altura?: string;
+  unilateral?: boolean;
   rangoRepeticionesMin?: number;
   rangoRepeticionesMax?: number;
   series: SerieRutinaRequest[];
@@ -204,6 +251,12 @@ export interface RegisterExerciseExecutionRequest {
   ejercicioPlanificadoId?: string;
   orden?: number;
   esAdicional?: boolean;
+  maquinaId?: string | null;
+  agarre?: string | null;
+  postura?: string | null;
+  accesorio?: string | null;
+  altura?: string | null;
+  unilateral?: boolean | null;
 }
 
 export interface SerieEjecucionRequest {
@@ -222,6 +275,10 @@ export interface EjercicioMetodoBilbo {
   pesoInicial: number;
   incremento: number;
   fechaCreacion: string;
+  agarre?: string;
+  postura?: string;
+  accesorio?: string;
+  altura?: string;
 }
 
 export interface ProgresoMetodoBilbo {

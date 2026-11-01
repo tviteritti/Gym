@@ -33,6 +33,11 @@ const mapRutinaFromDB = (rutinaData: any): Rutina => {
         grupoAgrupacion: ejPlan.grupo_agrupacion ?? undefined,
         tecnicaIntensidad: esTecnicaIntensidad(ejPlan.tecnica_intensidad) ? ejPlan.tecnica_intensidad : undefined,
         tecnicaSeries: ejPlan.tecnica_series ?? undefined,
+        agarre: ejPlan.agarre || undefined,
+        postura: ejPlan.postura || undefined,
+        accesorio: ejPlan.accesorio || undefined,
+        altura: ejPlan.altura || undefined,
+        unilateral: ejPlan.unilateral ?? undefined,
         seriesPlanificadas,
       };
     });
@@ -69,6 +74,11 @@ const rutinaToCreateRequest = (rutina: Rutina, usuarioId: string, nombre: string
       grupoAgrupacion: ejercicio.grupoAgrupacion,
       tecnicaIntensidad: ejercicio.tecnicaIntensidad,
       tecnicaSeries: ejercicio.tecnicaSeries,
+      agarre: ejercicio.agarre,
+      postura: ejercicio.postura,
+      accesorio: ejercicio.accesorio,
+      altura: ejercicio.altura,
+      unilateral: ejercicio.unilateral,
       series: ejercicio.seriesPlanificadas.map((serie) => ({
         numeroSerie: serie.numeroSerie,
       })),
@@ -104,6 +114,11 @@ async function insertDiasYEjercicios(rutinaId: string, dias: DiaRutinaRequest[])
           grupo_agrupacion: ejercicio.grupoAgrupacion ?? null,
           tecnica_intensidad: ejercicio.tecnicaIntensidad || null,
           tecnica_series: ejercicio.tecnicaIntensidad ? seriesTecnica(ejercicio) : null,
+          agarre: ejercicio.agarre || null,
+          postura: ejercicio.postura || null,
+          accesorio: ejercicio.accesorio || null,
+          altura: ejercicio.altura || null,
+          unilateral: ejercicio.unilateral ?? null,
           rango_repeticiones_min: null,
           rango_repeticiones_max: null,
         })

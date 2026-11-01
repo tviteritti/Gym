@@ -10,6 +10,7 @@ import { NumberInput } from '../components/ui/NumberInput';
 import { getMuscleColorWithDefault } from '../constants/muscleColors';
 import { formatFechaNumericaEs, parseDecimal, parseIntegerInput } from '../utils/formatters';
 import { calcularProximoPesoBilbo } from '../utils/bilbo';
+import { varianteBilboDe } from '../constants/variantes';
 import type { EjercicioMetodoBilbo, ProgresoMetodoBilbo, Ejercicio } from '../types';
 
 interface EjercicioBilboConProgreso extends EjercicioMetodoBilbo {
@@ -63,7 +64,7 @@ export const MetodoBilboPage = () => {
       const ejerciciosConProgreso = await Promise.all(
         data.map(async (ejercicio) => {
           const ultimoProgreso = await bilboService
-            .getUltimoProgreso(usuario.id, ejercicio.ejercicioId)
+            .getUltimoProgreso(usuario.id, ejercicio.ejercicioId, ejercicio.agarre, varianteBilboDe(ejercicio))
             .catch(() => null);
           
           const proximoPeso = calcularProximoPesoBilbo(ejercicio, ultimoProgreso) ?? ejercicio.pesoInicial;
@@ -72,7 +73,7 @@ export const MetodoBilboPage = () => {
           let repsProximoPeso: number | null = null;
           if (ultimoProgreso) {
             try {
-              const historialCompleto = await bilboService.getHistorialProgreso(usuario.id, ejercicio.ejercicioId);
+              const historialCompleto = await bilboService.getHistorialProgreso(usuario.id, ejercicio.ejercicioId, ejercicio.agarre, varianteBilboDe(ejercicio));
               const registroAnterior = historialCompleto.find(
                 p => p.pesoActual === proximoPeso && p.id !== ultimoProgreso.id && p.repeticiones > 0
               );
@@ -99,7 +100,7 @@ export const MetodoBilboPage = () => {
   const handleViewHistorial = async (ejercicio: EjercicioMetodoBilbo) => {
     if (!usuario) return;
     try {
-      const historialData = await bilboService.getHistorialProgreso(usuario.id, ejercicio.ejercicioId);
+      const historialData = await bilboService.getHistorialProgreso(usuario.id, ejercicio.ejercicioId, ejercicio.agarre, varianteBilboDe(ejercicio));
       setHistorial(historialData);
       setSelectedEjercicio(ejercicio);
       setShowEditConfig(false);
@@ -142,7 +143,7 @@ export const MetodoBilboPage = () => {
       await bilboService.update(usuario.id, selectedEjercicio.ejercicioId, {
         pesoInicial: editPesoInicial,
         incremento: editIncremento,
-      });
+      }, selectedEjercicio.agarre, varianteBilboDe(selectedEjercicio));
 
       const actualizado: EjercicioMetodoBilbo = {
         ...selectedEjercicio,
@@ -169,10 +170,12 @@ export const MetodoBilboPage = () => {
 
     setReiniciando(true);
     try {
-      await bilboService.reiniciarCiclo(usuario.id, selectedEjercicio.ejercicioId);
+      await bilboService.reiniciarCiclo(usuario.id, selectedEjercicio.ejercicioId, selectedEjercicio.agarre, varianteBilboDe(selectedEjercicio));
       const historialData = await bilboService.getHistorialProgreso(
         usuario.id,
-        selectedEjercicio.ejercicioId
+        selectedEjercicio.ejercicioId,
+        selectedEjercicio.agarre,
+        varianteBilboDe(selectedEjercicio)
       );
       setHistorial(historialData);
       await loadEjerciciosBilbo({ silent: true });
@@ -223,11 +226,18 @@ export const MetodoBilboPage = () => {
         selectedEjercicio.ejercicioId,
         pesoProgreso,
         repsProgreso,
-        fechaProgreso
+        fechaProgreso,
+        selectedEjercicio.agarre,
+        varianteBilboDe(selectedEjercicio)
       );
       
       // Recargar historial
-      const historialData = await bilboService.getHistorialProgreso(usuario.id, selectedEjercicio.ejercicioId);
+      const historialData = await bilboService.getHistorialProgreso(
+        usuario.id,
+        selectedEjercicio.ejercicioId,
+        selectedEjercicio.agarre,
+        varianteBilboDe(selectedEjercicio)
+      );
       setHistorial(historialData);
       await loadEjerciciosBilbo({ silent: true });
       

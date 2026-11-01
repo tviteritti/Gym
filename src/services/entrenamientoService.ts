@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { diaSemanaDesdeFechaIsoLocal } from '../utils/formatters';
+import { elegirEjecutadoPorAparicion, type AparicionEjercicio } from '../utils/ultimaSesion';
 import type {
   StartTrainingDayRequest,
   RegisterExerciseExecutionRequest,
@@ -8,6 +9,22 @@ import type {
   SerieEjecutada,
   UltimaSesionEjercicio,
 } from '../types';
+
+interface FiltroVariante {
+  postura?: string;
+  accesorio?: string;
+  altura?: string;
+  unilateral?: boolean;
+}
+
+function aplicarVariante<T extends { eq: (col: string, val: unknown) => T }>(query: T, extra?: FiltroVariante): T {
+  if (!extra) return query;
+  if (extra.postura) query = query.eq('postura', extra.postura);
+  if (extra.accesorio) query = query.eq('accesorio', extra.accesorio);
+  if (extra.altura) query = query.eq('altura', extra.altura);
+  if (extra.unilateral != null) query = query.eq('unilateral', extra.unilateral);
+  return query;
+}
 
 const mapEntrenamientoFromDB = (entrenamientoData: any): Entrenamiento => {
   const nombresDias = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -30,6 +47,12 @@ const mapEntrenamientoFromDB = (entrenamientoData: any): Entrenamiento => {
       orden: ejEjec.orden ?? undefined,
       esAdicional: !!ejEjec.es_adicional,
       fechaCreacion: ejEjec.fecha_creacion || undefined,
+      maquinaId: ejEjec.maquina_id || undefined,
+      agarre: ejEjec.agarre || undefined,
+      postura: ejEjec.postura || undefined,
+      accesorio: ejEjec.accesorio || undefined,
+      altura: ejEjec.altura || undefined,
+      unilateral: ejEjec.unilateral ?? undefined,
       seriesEjecutadas,
     };
   });
@@ -117,6 +140,12 @@ export const entrenamientoService = {
         ejercicio_planificado_id?: string;
         es_adicional?: boolean;
         orden?: number | null;
+        maquina_id?: string | null;
+        agarre?: string | null;
+        postura?: string | null;
+        accesorio?: string | null;
+        altura?: string | null;
+        unilateral?: boolean | null;
       } = { ejercicio_id: data.ejercicioId };
       if (data.ejercicioPlanificadoId) {
         patch.ejercicio_planificado_id = data.ejercicioPlanificadoId;
@@ -127,6 +156,16 @@ export const entrenamientoService = {
       if (data.esAdicional !== undefined) {
         patch.es_adicional = data.esAdicional;
       }
+      if (data.maquinaId !== undefined) {
+        patch.maquina_id = data.maquinaId;
+      }
+      if (data.agarre !== undefined) {
+        patch.agarre = data.agarre;
+      }
+      if (data.postura !== undefined) patch.postura = data.postura;
+      if (data.accesorio !== undefined) patch.accesorio = data.accesorio;
+      if (data.altura !== undefined) patch.altura = data.altura;
+      if (data.unilateral !== undefined) patch.unilateral = data.unilateral;
 
       const { error: updateError } = await supabase
         .from('ejercicios_ejecutados')
@@ -148,6 +187,12 @@ export const entrenamientoService = {
           ejercicio_planificado_id: data.ejercicioPlanificadoId ?? null,
           es_adicional: data.esAdicional ?? false,
           orden: data.orden ?? null,
+          maquina_id: data.maquinaId ?? null,
+          agarre: data.agarre ?? null,
+          postura: data.postura ?? null,
+          accesorio: data.accesorio ?? null,
+          altura: data.altura ?? null,
+          unilateral: data.unilateral ?? null,
         })
         .select('id')
         .single();
@@ -272,7 +317,10 @@ export const entrenamientoService = {
    */
   async getRecordsPersonalesMap(
     usuarioId: string,
-    ejercicioIds: string[]
+    ejercicioIds: string[],
+    maquinaId?: string,
+    agarre?: string,
+    extra?: FiltroVariante
   ): Promise<Record<string, { peso: number; reps: number } | null>> {
     const unique = [...new Set(ejercicioIds)];
     const out: Record<string, { peso: number; reps: number } | null> = {};
@@ -297,11 +345,15 @@ export const entrenamientoService = {
       return out;
     }
 
-    const { data: ejecutados, error: ejecutadosError } = await supabase
+    let ejecutadosQuery = supabase
       .from('ejercicios_ejecutados')
       .select('id, ejercicio_id')
       .in('entrenamiento_id', entrenamientoIds)
       .in('ejercicio_id', unique);
+    if (maquinaId) ejecutadosQuery = ejecutadosQuery.eq('maquina_id', maquinaId);
+    if (agarre) ejecutadosQuery = ejecutadosQuery.eq('agarre', agarre);
+    ejecutadosQuery = aplicarVariante(ejecutadosQuery, extra);
+    const { data: ejecutados, error: ejecutadosError } = await ejecutadosQuery;
 
     if (ejecutadosError) {
       throw new Error(`Error al obtener ejecuciones: ${ejecutadosError.message}`);
@@ -459,8 +511,149 @@ export const entrenamientoService = {
     return out;
   },
 
-  async getRecordPersonal(usuarioId: string, ejercicioId: string): Promise<{peso: number, reps: number} | null> {
-    const map = await this.getRecordsPersonalesMap(usuarioId, [ejercicioId]);
+  /**
+   * Última sesión de cada aparición del ejercicio (1ª, 2ª, … en el día),
+   * con fecha estrictamente anterior a `fechaAntesDe`.
+   */
+  async getUltimasSesionesPorAparicion(
+    usuarioId: string,
+    apariciones: AparicionEjercicio[],
+    fechaAntesDe: string
+  ): Promise<Record<string, UltimaSesionEjercicio | null>> {
+    const out: Record<string, UltimaSesionEjercicio | null> = {};
+    for (const a of apariciones) out[a.slotId] = null;
+    const ejercicioIds = [...new Set(apariciones.map((a) => a.ejercicioId))];
+    if (ejercicioIds.length === 0) return out;
+
+    const { data: entrenamientos, error: entErr } = await supabase
+      .from('entrenamientos')
+      .select('id, fecha')
+      .eq('usuario_id', usuarioId)
+      .lt('fecha', fechaAntesDe);
+
+    if (entErr) {
+      throw new Error(`Error al obtener entrenamientos previos: ${entErr.message}`);
+    }
+
+    const entById = new Map((entrenamientos || []).map((e) => [e.id, e.fecha as string]));
+    const entIds = [...entById.keys()];
+    if (entIds.length === 0) return out;
+
+    const { data: ejecutados, error: ejErr } = await supabase
+      .from('ejercicios_ejecutados')
+      .select('id, ejercicio_id, entrenamiento_id, orden, fecha_creacion, maquina_id, agarre, postura, accesorio, altura, unilateral')
+      .in('entrenamiento_id', entIds)
+      .in('ejercicio_id', ejercicioIds);
+
+    if (ejErr) {
+      throw new Error(`Error al obtener ejecuciones previas: ${ejErr.message}`);
+    }
+
+    const elegidoPorSlot = elegirEjecutadoPorAparicion(
+      (ejecutados || [])
+        .map((e) => ({
+          id: e.id,
+          ejercicioId: e.ejercicio_id,
+          fecha: entById.get(e.entrenamiento_id) || '',
+          orden: e.orden ?? null,
+          fechaCreacion: e.fecha_creacion || '',
+          maquinaId: e.maquina_id || null,
+          agarre: e.agarre || null,
+          postura: e.postura || null,
+          accesorio: e.accesorio || null,
+          altura: e.altura || null,
+          unilateral: e.unilateral ?? null,
+        }))
+        .filter((r) => r.fecha),
+      apariciones
+    );
+
+    const ejecutadoIds = [...new Set(Object.values(elegidoPorSlot).filter((id): id is string => !!id))];
+    if (ejecutadoIds.length === 0) return out;
+
+    const { data: seriesRows, error: sErr } = await supabase
+      .from('series_ejecutadas')
+      .select('ejercicio_ejecutado_id, numero_serie, peso_real, repeticiones, es_compleja')
+      .in('ejercicio_ejecutado_id', ejecutadoIds);
+
+    if (sErr) {
+      throw new Error(`Error al obtener series de sesión previa: ${sErr.message}`);
+    }
+
+    const seriesPorEjecutado = new Map<string, UltimaSesionEjercicio['series']>();
+    for (const s of seriesRows || []) {
+      const list = seriesPorEjecutado.get(s.ejercicio_ejecutado_id) || [];
+      list.push({
+        numeroSerie: s.numero_serie,
+        pesoReal: s.peso_real != null ? parseFloat(s.peso_real.toString()) : undefined,
+        repeticiones: s.repeticiones ?? undefined,
+        ...(s.es_compleja ? { esCompleja: true } : {}),
+      });
+      seriesPorEjecutado.set(s.ejercicio_ejecutado_id, list);
+    }
+    seriesPorEjecutado.forEach((list) => {
+      list.sort(
+        (a, b) => Number(!!a.esCompleja) - Number(!!b.esCompleja) || a.numeroSerie - b.numeroSerie
+      );
+    });
+
+    const fechaPorEjecutado = new Map(
+      (ejecutados || []).map((e) => [e.id, entById.get(e.entrenamiento_id) || ''])
+    );
+    const maquinaPorEjecutado = new Map(
+      (ejecutados || []).map((e) => [e.id, e.maquina_id || null])
+    );
+    const agarrePorEjecutado = new Map(
+      (ejecutados || []).map((e) => [e.id, e.agarre || null])
+    );
+    const posturaPorEjecutado = new Map((ejecutados || []).map((e) => [e.id, e.postura || null]));
+    const accesorioPorEjecutado = new Map((ejecutados || []).map((e) => [e.id, e.accesorio || null]));
+    const alturaPorEjecutado = new Map((ejecutados || []).map((e) => [e.id, e.altura || null]));
+    const unilateralPorEjecutado = new Map((ejecutados || []).map((e) => [e.id, e.unilateral ?? null]));
+    const maquinaPedida = new Map(apariciones.map((a) => [a.slotId, a.maquinaId]));
+    const agarrePedido = new Map(apariciones.map((a) => [a.slotId, a.agarre]));
+    const posturaPedida = new Map(apariciones.map((a) => [a.slotId, a.postura]));
+    const accesorioPedido = new Map(apariciones.map((a) => [a.slotId, a.accesorio]));
+    const alturaPedida = new Map(apariciones.map((a) => [a.slotId, a.altura]));
+    const unilateralPedido = new Map(apariciones.map((a) => [a.slotId, a.unilateral]));
+
+    for (const [slotId, ejecutadoId] of Object.entries(elegidoPorSlot)) {
+      if (!ejecutadoId) continue;
+      const series = seriesPorEjecutado.get(ejecutadoId) || [];
+      if (series.length > 0) {
+        const pidioMaquina = !!maquinaPedida.get(slotId);
+        const sinMaquina = pidioMaquina && !maquinaPorEjecutado.get(ejecutadoId);
+        const pidioAgarre = !!agarrePedido.get(slotId);
+        const sinAgarre = pidioAgarre && !agarrePorEjecutado.get(ejecutadoId);
+        const sinPostura = !!posturaPedida.get(slotId) && !posturaPorEjecutado.get(ejecutadoId);
+        const sinAccesorio = !!accesorioPedido.get(slotId) && !accesorioPorEjecutado.get(ejecutadoId);
+        const sinAltura = !!alturaPedida.get(slotId) && !alturaPorEjecutado.get(ejecutadoId);
+        const pidioUni = unilateralPedido.get(slotId);
+        const sinUnilateral = pidioUni != null && unilateralPorEjecutado.get(ejecutadoId) == null;
+        out[slotId] = {
+          fecha: fechaPorEjecutado.get(ejecutadoId) || '',
+          series,
+          ...(sinMaquina ? { sinMaquina: true } : {}),
+          ...(sinAgarre ? { sinAgarre: true } : {}),
+          ...(sinPostura ? { sinPostura: true } : {}),
+          ...(sinAccesorio ? { sinAccesorio: true } : {}),
+          ...(sinAltura ? { sinAltura: true } : {}),
+          ...(sinUnilateral ? { sinUnilateral: true } : {}),
+        };
+      }
+    }
+
+    return out;
+  },
+
+  async getRecordPersonal(
+    usuarioId: string,
+    ejercicioId: string,
+    maquinaId?: string,
+    agarre?: string,
+    extra?: FiltroVariante
+  ): Promise<{peso: number, reps: number} | null> {
+    const map = await this.getRecordsPersonalesMap(usuarioId, [ejercicioId], maquinaId, agarre, extra);
     return map[ejercicioId] ?? null;
   },
 
@@ -470,7 +663,10 @@ export const entrenamientoService = {
   async getMaxRepsBilboBundle(
     usuarioId: string,
     ejercicioId: string,
-    pesoObjetivo: number
+    pesoObjetivo: number,
+    maquinaId?: string,
+    agarre?: string,
+    extra?: FiltroVariante
   ): Promise<{
     cercano: { peso: number; reps: number } | null;
     exacto: { peso: number; reps: number } | null;
@@ -493,11 +689,15 @@ export const entrenamientoService = {
 
     const entrenamientoIds = entrenamientos.map((e) => e.id);
 
-    const { data: ejecutados, error: ejecutadosError } = await supabase
+    let ejecutadosQuery = supabase
       .from('ejercicios_ejecutados')
       .select('id')
       .in('entrenamiento_id', entrenamientoIds)
       .eq('ejercicio_id', ejercicioId);
+    if (maquinaId) ejecutadosQuery = ejecutadosQuery.eq('maquina_id', maquinaId);
+    if (agarre) ejecutadosQuery = ejecutadosQuery.eq('agarre', agarre);
+    ejecutadosQuery = aplicarVariante(ejecutadosQuery, extra);
+    const { data: ejecutados, error: ejecutadosError } = await ejecutadosQuery;
 
     if (ejecutadosError) {
       throw new Error(`Error al obtener ejecuciones: ${ejecutadosError.message}`);
@@ -550,18 +750,24 @@ export const entrenamientoService = {
   async getMaxRepsEnPesoCercano(
     usuarioId: string,
     ejercicioId: string,
-    pesoObjetivo: number
+    pesoObjetivo: number,
+    maquinaId?: string,
+    agarre?: string,
+    extra?: FiltroVariante
   ): Promise<{ peso: number; reps: number } | null> {
-    const { cercano } = await this.getMaxRepsBilboBundle(usuarioId, ejercicioId, pesoObjetivo);
+    const { cercano } = await this.getMaxRepsBilboBundle(usuarioId, ejercicioId, pesoObjetivo, maquinaId, agarre, extra);
     return cercano;
   },
 
   async getMaxRepsEnPesoExacto(
     usuarioId: string,
     ejercicioId: string,
-    pesoObjetivo: number
+    pesoObjetivo: number,
+    maquinaId?: string,
+    agarre?: string,
+    extra?: FiltroVariante
   ): Promise<{ peso: number; reps: number } | null> {
-    const { exacto } = await this.getMaxRepsBilboBundle(usuarioId, ejercicioId, pesoObjetivo);
+    const { exacto } = await this.getMaxRepsBilboBundle(usuarioId, ejercicioId, pesoObjetivo, maquinaId, agarre, extra);
     return exacto;
   },
 };

@@ -18,6 +18,12 @@ interface EntrenamientoState {
       ejercicioPlanificadoId?: string;
       orden?: number;
       esAdicional?: boolean;
+      maquinaId?: string | null;
+      agarre?: string | null;
+      postura?: string | null;
+      accesorio?: string | null;
+      altura?: string | null;
+      unilateral?: boolean | null;
     }
   ) => Promise<void>;
   loadTodayTraining: (usuarioId: string) => Promise<void>;
@@ -81,6 +87,12 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
       ejercicioPlanificadoId?: string;
       orden?: number;
       esAdicional?: boolean;
+      maquinaId?: string | null;
+      agarre?: string | null;
+      postura?: string | null;
+      accesorio?: string | null;
+      altura?: string | null;
+      unilateral?: boolean | null;
     }
   ) => {
     set({ loading: true, error: null });
@@ -99,6 +111,12 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
         ejercicioPlanificadoId: meta?.ejercicioPlanificadoId,
         orden: meta?.orden,
         esAdicional: meta?.esAdicional,
+        maquinaId: meta?.maquinaId,
+        agarre: meta?.agarre,
+        postura: meta?.postura,
+        accesorio: meta?.accesorio,
+        altura: meta?.altura,
+        unilateral: meta?.unilateral,
         series: series.map((s) => ({
           numeroSerie: s.numeroSerie,
           pesoReal: s.pesoReal,
@@ -109,7 +127,8 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
 
       // 3. Si el ejercicio pertenece al método Bilbo, guardar el progreso
       try {
-        const ejercicioBilbo = await bilboService.getByEjercicio(usuarioId, ejercicioId);
+        const extra = { accesorio: meta?.accesorio, postura: meta?.postura, altura: meta?.altura };
+        const ejercicioBilbo = await bilboService.getByEjercicio(usuarioId, ejercicioId, meta?.agarre, extra);
         if (ejercicioBilbo) {
           // Obtener la primera serie (serie 1)
           const primeraSerie = series.find(s => s.numeroSerie === 1 && !s.esCompleja);
@@ -121,7 +140,9 @@ export const useEntrenamientoStore = create<EntrenamientoState>((set, get) => ({
               entrenamientoId,
               primeraSerie.pesoReal,
               primeraSerie.repeticiones,
-              fecha
+              fecha,
+              meta?.agarre,
+              extra
             );
           }
         }

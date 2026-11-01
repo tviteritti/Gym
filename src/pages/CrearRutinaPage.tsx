@@ -10,6 +10,8 @@ import { Card } from "../components/ui/Card"
 import { LoadingOverlay } from "../components/ui/LoadingOverlay"
 import { RutinaEditorSidePanel } from "../components/features/RutinaEditorSidePanel"
 import { ExerciseSelect } from "../components/features/ExerciseSelect"
+import { VariantesCampos } from "../components/features/VariantesCampos"
+import { conservarVariante, faltaVariante } from "../constants/variantes"
 import { getMuscleColorWithDefault } from "../constants/muscleColors"
 import {
   seriesDesdeCantidad,
@@ -159,6 +161,18 @@ export const CrearRutinaPage = () => {
         return
       }
 
+      const incompleto = dias.some((dia) =>
+        dia.ejercicios.some((ej) => {
+          const info = ejercicios.find((e) => e.id === ej.ejercicioId)
+          return !!faltaVariante(info, ej)
+        })
+      )
+      if (incompleto) {
+        setError("Completá agarre, postura, accesorio o altura en los ejercicios que lo piden")
+        setLoading(false)
+        return
+      }
+
       await rutinaService.create({
         usuarioId: usuario.id,
         nombre,
@@ -299,12 +313,42 @@ export const CrearRutinaPage = () => {
                         <ExerciseSelect
                           ejercicios={ejercicios}
                           value={ejercicio.ejercicioId}
-                          onChange={(ejercicioId) =>
-                            actualizarEjercicio(diaIndex, ejercicioIndex, "ejercicioId", ejercicioId)
-                          }
+                          onChange={(ejercicioId) => {
+                            const info = ejercicios.find((e) => e.id === ejercicioId)
+                            const nuevosDias = dias.map((d, i) =>
+                              i === diaIndex
+                                ? {
+                                    ...d,
+                                    ejercicios: d.ejercicios.map((row, j) =>
+                                      j === ejercicioIndex
+                                        ? {
+                                            ...row,
+                                            ejercicioId,
+                                            ...conservarVariante(info, row),
+                                          }
+                                        : row
+                                    ),
+                                  }
+                                : d
+                            )
+                            setDias(nuevosDias)
+                          }}
                           required
                         />
                       </div>
+                      <VariantesCampos
+                        ejercicio={ejInfo}
+                        agarre={ejercicio.agarre}
+                        postura={ejercicio.postura}
+                        accesorio={ejercicio.accesorio}
+                        altura={ejercicio.altura}
+                        unilateral={ejercicio.unilateral}
+                        onAgarre={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "agarre", valor)}
+                        onPostura={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "postura", valor)}
+                        onAccesorio={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "accesorio", valor)}
+                        onAltura={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "altura", valor)}
+                        onUnilateral={(valor) => actualizarEjercicio(diaIndex, ejercicioIndex, "unilateral", valor)}
+                      />
                       <div className="w-14 shrink-0">
                         <label className="sr-only">Series</label>
                         <input

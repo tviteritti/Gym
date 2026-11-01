@@ -17,6 +17,7 @@ type ExerciseSelectProps = {
   className?: string
   placeholder?: string
   required?: boolean
+  disabled?: boolean
 }
 
 type GrupoMusculo = {
@@ -32,6 +33,7 @@ export const ExerciseSelect = ({
   className = "",
   placeholder = "Ejercicio…",
   required = false,
+  disabled = false,
 }: ExerciseSelectProps) => {
   const listboxId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -169,8 +171,14 @@ export const ExerciseSelect = ({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-full items-center gap-2 rounded-md border border-dark-border bg-dark-bg px-2 text-left text-sm text-dark-text focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return
+          setOpen((v) => !v)
+        }}
+        className={`flex h-9 w-full items-center gap-2 rounded-md border border-dark-border bg-dark-bg px-2 text-left text-sm text-dark-text focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${
+          disabled ? "cursor-not-allowed opacity-60" : ""
+        }`}
         style={{
           borderLeftWidth: seleccionado && colorSeleccionado !== "transparent" ? 4 : undefined,
           borderLeftColor:
