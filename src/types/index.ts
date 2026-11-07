@@ -114,6 +114,13 @@ export interface SerieEjecutada {
   esCompleja?: boolean;
 }
 
+/** Una sesión ya hecha, con sus series, para exportar o comparar. */
+export interface SesionRecienteEjercicio {
+  fecha: string;
+  maquinaId?: string;
+  series: { numeroSerie: number; pesoReal?: number; repeticiones?: number; esCompleja?: boolean }[];
+}
+
 /** Última sesión registrada antes de una fecha (para comparar progreso). */
 export interface UltimaSesionEjercicio {
   fecha: string;

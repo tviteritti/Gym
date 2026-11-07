@@ -4,6 +4,14 @@ import { Layout } from "../components/layout/Layout"
 import { useAuthStore } from "../store/authStore"
 import { rutinaService } from "../services/rutinaService"
 import { ejercicioService } from "../services/ejercicioService"
+import { entrenamientoService } from "../services/entrenamientoService"
+import {
+  SESIONES_A_EXPORTAR,
+  aparicionesDeRutina,
+  descargarCsv,
+  nombreArchivoRutina,
+  rutinaACsv,
+} from "../utils/exportarRutinaCsv"
 import { Button } from "../components/ui/Button"
 import { Card } from "../components/ui/Card"
 import { LoadingOverlay } from "../components/ui/LoadingOverlay"
@@ -12,12 +20,13 @@ import { getMuscleColorWithDefault } from "../constants/muscleColors"
 import { calcularResumenSeriesRutina } from "../utils/rutinaVolumen"
 import { TECNICAS_INTENSIDAD, formatVolumen, seriesTecnica } from "../utils/tecnicaIntensidad"
 
-type RutinaAction = "duplicate" | "activate" | "delete"
+type RutinaAction = "duplicate" | "activate" | "delete" | "export"
 
 const actionMessages: Record<RutinaAction, string> = {
   duplicate: "Duplicando rutina…",
   activate: "Activando rutina…",
   delete: "Eliminando rutina…",
+  export: "Armando el CSV…",
 }
 
 export const RutinasPage = () => {
@@ -99,6 +108,35 @@ export const RutinasPage = () => {
     } catch (error) {
       console.error("Error al eliminar rutina:", error)
       alert(error instanceof Error ? error.message : "Error al eliminar la rutina")
+    } finally {
+      setActionBusy(null)
+    }
+  }
+
+  const handleExport = async (rutina: Rutina) => {
+    if (!usuario || actionBusy) return
+    setActionBusy({ type: "export", rutinaId: rutina.id })
+    try {
+      const [sesiones, maquinas] = await Promise.all([
+        entrenamientoService.getSesionesRecientesPorAparicion(
+          usuario.id,
+          aparicionesDeRutina(rutina),
+          SESIONES_A_EXPORTAR
+        ),
+        ejercicioService.getMaquinas(),
+      ])
+      const hoy = new Date()
+      const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`
+      const csv = rutinaACsv(
+        rutina,
+        ejercicios,
+        sesiones,
+        new Map(maquinas.map((m) => [m.id, m.nombre]))
+      )
+      descargarCsv(nombreArchivoRutina(rutina.nombre, hoyIso), csv)
+    } catch (error) {
+      console.error("Error al exportar rutina:", error)
+      alert(error instanceof Error ? error.message : "Error al exportar la rutina")
     } finally {
       setActionBusy(null)
     }
@@ -189,6 +227,16 @@ export const RutinasPage = () => {
                            onClick={() => setExpandedRutinaId(isExpanded ? null : rutina.id)}
                          >
                            {isExpanded ? "Ocultar" : "Ver Detalle"}
+                         </Button>
+                         <Button
+                           variant="outline"
+                           size="sm"
+                           disabled={busy}
+                           onClick={() => handleExport(rutina)}
+                         >
+                           {isThisBusy && actionBusy?.type === "export"
+                             ? "Exportando…"
+                             : "Exportar CSV"}
                          </Button>
                          <Button
                            variant="outline"

@@ -27,6 +27,30 @@ export interface EjecucionPreviaOrdenada {
   unilateral?: boolean | null;
 }
 
+function agruparPorEjercicio(rows: EjecucionPreviaOrdenada[]): Map<string, EjecucionPreviaOrdenada[]> {
+  const porEjercicio = new Map<string, EjecucionPreviaOrdenada[]>();
+  for (const r of rows) {
+    const list = porEjercicio.get(r.ejercicioId) ?? [];
+    list.push(r);
+    porEjercicio.set(r.ejercicioId, list);
+  }
+  return porEjercicio;
+}
+
+function poolParaPeticion(
+  porEjercicio: Map<string, EjecucionPreviaOrdenada[]>,
+  pet: AparicionEjercicio
+): EjecucionPreviaOrdenada[] {
+  let base = porEjercicio.get(pet.ejercicioId) ?? [];
+  base = acotarTexto(base, pet.agarre, (r) => r.agarre);
+  base = acotarTexto(base, pet.postura, (r) => r.postura);
+  base = acotarTexto(base, pet.accesorio, (r) => r.accesorio);
+  base = acotarTexto(base, pet.altura, (r) => r.altura);
+  base = acotarBool(base, pet.unilateral, (r) => r.unilateral);
+  const deMaquina = pet.maquinaId ? base.filter((r) => r.maquinaId === pet.maquinaId) : base;
+  return pet.maquinaId && deMaquina.length === 0 ? base.filter((r) => !r.maquinaId) : deMaquina;
+}
+
 /**
  * Para cada aparición (1ª, 2ª, …) elige la ejecución previa de esa misma posición.
  * No reutiliza la de otra aparición del mismo ejercicio.
@@ -38,25 +62,28 @@ export function elegirEjecutadoPorAparicion(
   const out: Record<string, string | null> = {};
   for (const p of peticiones) out[p.slotId] = null;
 
-  const porEjercicio = new Map<string, EjecucionPreviaOrdenada[]>();
-  for (const r of rows) {
-    const list = porEjercicio.get(r.ejercicioId) ?? [];
-    list.push(r);
-    porEjercicio.set(r.ejercicioId, list);
-  }
-
+  const porEjercicio = agruparPorEjercicio(rows);
   for (const pet of peticiones) {
-    let base = porEjercicio.get(pet.ejercicioId) ?? [];
-    base = acotarTexto(base, pet.agarre, (r) => r.agarre);
-    base = acotarTexto(base, pet.postura, (r) => r.postura);
-    base = acotarTexto(base, pet.accesorio, (r) => r.accesorio);
-    base = acotarTexto(base, pet.altura, (r) => r.altura);
-    base = acotarBool(base, pet.unilateral, (r) => r.unilateral);
-    const deMaquina = pet.maquinaId ? base.filter((r) => r.maquinaId === pet.maquinaId) : base;
-    const pool = pet.maquinaId && deMaquina.length === 0 ? base.filter((r) => !r.maquinaId) : deMaquina;
-    out[pet.slotId] = elegirEnPool(pool, pet.indice);
+    out[pet.slotId] = elegirEnPool(poolParaPeticion(porEjercicio, pet), pet.indice);
   }
 
+  return out;
+}
+
+/** Hasta `cantidad` ejecuciones recientes (más nueva primero) de la misma aparición. */
+export function elegirEjecutadosRecientesPorAparicion(
+  rows: EjecucionPreviaOrdenada[],
+  peticiones: AparicionEjercicio[],
+  cantidad: number
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const p of peticiones) out[p.slotId] = [];
+  if (cantidad <= 0) return out;
+
+  const porEjercicio = agruparPorEjercicio(rows);
+  for (const pet of peticiones) {
+    out[pet.slotId] = elegirIdsEnPool(poolParaPeticion(porEjercicio, pet), pet.indice, cantidad);
+  }
   return out;
 }
 
@@ -80,7 +107,18 @@ function acotarBool(
   return propios.length > 0 ? propios : rows.filter((r) => leer(r) == null);
 }
 
-function elegirEnPool(rows: EjecucionPreviaOrdenada[], indice: number): string | null {
+function ordenarAparicionesDelDia(lista: EjecucionPreviaOrdenada[]): void {
+  lista.sort((a, b) => {
+    const oa = a.orden ?? Number.MAX_SAFE_INTEGER;
+    const ob = b.orden ?? Number.MAX_SAFE_INTEGER;
+    if (oa !== ob) return oa - ob;
+    const c = a.fechaCreacion.localeCompare(b.fechaCreacion);
+    if (c !== 0) return c;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function elegirIdsEnPool(rows: EjecucionPreviaOrdenada[], indice: number, cantidad: number): string[] {
   const porFecha = new Map<string, EjecucionPreviaOrdenada[]>();
   for (const r of rows) {
     const list = porFecha.get(r.fecha) ?? [];
@@ -89,19 +127,18 @@ function elegirEnPool(rows: EjecucionPreviaOrdenada[], indice: number): string |
   }
 
   const fechas = [...porFecha.keys()].sort((a, b) => b.localeCompare(a));
+  const ids: string[] = [];
   for (const fecha of fechas) {
+    if (ids.length >= cantidad) break;
     const lista = porFecha.get(fecha)!;
-    lista.sort((a, b) => {
-      const oa = a.orden ?? Number.MAX_SAFE_INTEGER;
-      const ob = b.orden ?? Number.MAX_SAFE_INTEGER;
-      if (oa !== ob) return oa - ob;
-      const c = a.fechaCreacion.localeCompare(b.fechaCreacion);
-      if (c !== 0) return c;
-      return a.id.localeCompare(b.id);
-    });
-    if (lista[indice]) return lista[indice].id;
+    ordenarAparicionesDelDia(lista);
+    if (lista[indice]) ids.push(lista[indice].id);
   }
-  return null;
+  return ids;
+}
+
+function elegirEnPool(rows: EjecucionPreviaOrdenada[], indice: number): string | null {
+  return elegirIdsEnPool(rows, indice, 1)[0] ?? null;
 }
 
 /** Índice de cada slot entre las apariciones del mismo ejercicio, ordenadas por posición en el día. */

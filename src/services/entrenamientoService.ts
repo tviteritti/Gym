@@ -1,12 +1,13 @@
 import { supabase } from '../config/supabase';
 import { diaSemanaDesdeFechaIsoLocal } from '../utils/formatters';
-import { elegirEjecutadoPorAparicion, type AparicionEjercicio } from '../utils/ultimaSesion';
+import { elegirEjecutadoPorAparicion, elegirEjecutadosRecientesPorAparicion, type AparicionEjercicio } from '../utils/ultimaSesion';
 import type {
   StartTrainingDayRequest,
   RegisterExerciseExecutionRequest,
   Entrenamiento,
   EjercicioEjecutado,
   SerieEjecutada,
+  SesionRecienteEjercicio,
   UltimaSesionEjercicio,
 } from '../types';
 
@@ -641,6 +642,124 @@ export const entrenamientoService = {
           ...(sinUnilateral ? { sinUnilateral: true } : {}),
         };
       }
+    }
+
+    return out;
+  },
+
+  /**
+   * Últimas `cantidad` sesiones de cada aparición (más reciente primero),
+   * con la misma variante (agarre, postura, accesorio, altura, unilateral).
+   */
+  async getSesionesRecientesPorAparicion(
+    usuarioId: string,
+    apariciones: AparicionEjercicio[],
+    cantidad: number
+  ): Promise<Record<string, SesionRecienteEjercicio[]>> {
+    const out: Record<string, SesionRecienteEjercicio[]> = {};
+    for (const a of apariciones) out[a.slotId] = [];
+    const ejercicioIds = [...new Set(apariciones.map((a) => a.ejercicioId))];
+    if (ejercicioIds.length === 0 || cantidad <= 0) return out;
+
+    type SerieRow = {
+      numero_serie: number;
+      peso_real: number | string | null;
+      repeticiones: number | null;
+      es_compleja: boolean | null;
+    };
+    type EjecutadoRow = {
+      id: string;
+      ejercicio_id: string;
+      orden: number | null;
+      fecha_creacion: string | null;
+      maquina_id: string | null;
+      agarre: string | null;
+      postura: string | null;
+      accesorio: string | null;
+      altura: string | null;
+      unilateral: boolean | null;
+      entrenamientos: { fecha: string } | { fecha: string }[] | null;
+      series_ejecutadas: SerieRow[] | null;
+    };
+
+    const pageSize = 500;
+    const ejecutados: EjecutadoRow[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from('ejercicios_ejecutados')
+        .select(`
+          id,
+          ejercicio_id,
+          orden,
+          fecha_creacion,
+          maquina_id,
+          agarre,
+          postura,
+          accesorio,
+          altura,
+          unilateral,
+          entrenamientos!inner(fecha, usuario_id),
+          series_ejecutadas(numero_serie, peso_real, repeticiones, es_compleja)
+        `)
+        .eq('entrenamientos.usuario_id', usuarioId)
+        .in('ejercicio_id', ejercicioIds)
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        throw new Error(`Error al obtener sesiones para exportar: ${error.message}`);
+      }
+      const page = (data || []) as EjecutadoRow[];
+      ejecutados.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    const fechaDe = (row: EjecutadoRow): string => {
+      const ent = row.entrenamientos;
+      if (Array.isArray(ent)) return ent[0]?.fecha || '';
+      return ent?.fecha || '';
+    };
+
+    const previos = ejecutados
+      .map((e) => ({
+        id: e.id,
+        ejercicioId: e.ejercicio_id,
+        fecha: fechaDe(e),
+        orden: e.orden ?? null,
+        fechaCreacion: e.fecha_creacion || '',
+        maquinaId: e.maquina_id || null,
+        agarre: e.agarre || null,
+        postura: e.postura || null,
+        accesorio: e.accesorio || null,
+        altura: e.altura || null,
+        unilateral: e.unilateral ?? null,
+      }))
+      .filter((r) => r.fecha);
+
+    const idsPorSlot = elegirEjecutadosRecientesPorAparicion(previos, apariciones, cantidad);
+    const porId = new Map(ejecutados.map((e) => [e.id, e]));
+
+    for (const [slotId, ids] of Object.entries(idsPorSlot)) {
+      out[slotId] = ids.flatMap((id) => {
+        const row = porId.get(id);
+        if (!row) return [];
+        const series = (row.series_ejecutadas || [])
+          .map((s) => ({
+            numeroSerie: s.numero_serie,
+            pesoReal: s.peso_real != null ? parseFloat(s.peso_real.toString()) : undefined,
+            repeticiones: s.repeticiones ?? undefined,
+            ...(s.es_compleja ? { esCompleja: true } : {}),
+          }))
+          .sort(
+            (a, b) => Number(!!a.esCompleja) - Number(!!b.esCompleja) || a.numeroSerie - b.numeroSerie
+          );
+        if (series.length === 0) return [];
+        return [{
+          fecha: fechaDe(row),
+          ...(row.maquina_id ? { maquinaId: row.maquina_id } : {}),
+          series,
+        }];
+      });
     }
 
     return out;
