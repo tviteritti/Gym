@@ -652,15 +652,15 @@ export const EjercicioCard = ({
         borderLeftWidth: color !== 'transparent' ? '4px' : undefined,
       }}
     >
-      <div className="mb-3 flex justify-between items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-2">
+      <div className="mb-3 space-y-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="flex min-w-[12rem] flex-1 items-start gap-2">
             <ExerciseSelect
               ejercicios={ejerciciosDisponibles}
               value={ejercicioSeleccionadoId}
               onChange={setEjercicioSeleccionadoId}
               disabled={bloqueado}
-              className="min-w-0 flex-1 mb-2"
+              className="min-w-0 flex-1"
             />
             <button
               type="button"
@@ -689,8 +689,35 @@ export const EjercicioCard = ({
               </svg>
             </button>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm text-dark-text-muted">Orden: {ejercicio.orden}</p>
+          <div className="flex shrink-0 items-center gap-2">
+            {isSaved && !hasChanges && (
+              <div className="flex items-center gap-2 text-green-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="whitespace-nowrap text-sm font-medium">Guardado</span>
+              </div>
+            )}
+            {isSaved && !hasChanges && !isEditMode && (
+              <Button variant="outline" size="sm" onClick={habilitarEdicion}>
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Editar
+              </Button>
+            )}
+            {isEditMode && (
+              <Button variant="outline" size="sm" onClick={cancelarEdicion}>
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Cancelar
+              </Button>
+            )}
+          </div>
+        </div>
+          <div className="flex w-full flex-wrap items-center gap-2">
+            <p className="whitespace-nowrap text-sm text-dark-text-muted">Orden: {ejercicio.orden}</p>
             {esEjercicioAdicional && (
               <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded">Ejercicio adicional</span>
             )}
@@ -753,8 +780,8 @@ export const EjercicioCard = ({
             }}
           />
           {maquinasDelGrupo.length > 0 && (
-            <div className="mt-2">
-              <p className="text-xs font-semibold text-dark-text-muted uppercase tracking-wide mb-1.5">
+            <div className="w-full">
+              <p className="mb-1.5 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
                 Máquina
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -788,34 +815,6 @@ export const EjercicioCard = ({
               )}
             </div>
           )}
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isSaved && !hasChanges && (
-            <div className="flex items-center gap-2 text-green-400">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="text-sm font-medium">Guardado</span>
-            </div>
-          )}
-          {isSaved && !hasChanges && !isEditMode && (
-            <Button variant="outline" size="sm" onClick={habilitarEdicion} className="ml-2">
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-              Editar
-            </Button>
-          )}
-          {isEditMode && (
-            <Button variant="outline" size="sm" onClick={cancelarEdicion} className="ml-2">
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              Cancelar
-            </Button>
-          )}
-        </div>
       </div>
 
       {recordPanelAbierto && (

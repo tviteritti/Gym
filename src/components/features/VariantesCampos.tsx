@@ -50,7 +50,7 @@ export const VariantesCampos = ({
   if (!hay) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+    <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1">
       <SelectorFila
         titulo="Agarre"
         opciones={agarres.map((id) => ({ id, label: etiquetaAgarre(id) }))}

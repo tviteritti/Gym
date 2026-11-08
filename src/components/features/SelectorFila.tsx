@@ -9,8 +9,8 @@ interface SelectorFilaProps {
 export const SelectorFila = ({ titulo, opciones, value, onChange, disabled }: SelectorFilaProps) => {
   if (opciones.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <span className="mr-0.5 text-[10px] font-medium uppercase tracking-wide text-dark-text-muted">{titulo}</span>
+    <div className="flex w-full flex-wrap items-center gap-1">
+      <span className="mr-0.5 shrink-0 whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-dark-text-muted">{titulo}</span>
       {opciones.map((op) => {
         const activa = value === op.id;
         return (
