@@ -11,6 +11,7 @@ import type {
   ProgresoMetodoBilbo,
   UltimaSesionEjercicio,
   Maquina,
+  TecnicaIntensidad,
 } from '../../types';
 import { useEntrenamientoStore } from '../../store/entrenamientoStore';
 import { bilboService } from '../../services/bilboService';
@@ -22,7 +23,7 @@ import { esAgarre } from '../../constants/agarres';
 import { faltaVariante, grupoMaquinaDe } from '../../constants/variantes';
 import { calcularProximoPesoBilbo } from '../../utils/bilbo';
 import { formatFechaCortaEs, parseDecimal } from '../../utils/formatters';
-import { TECNICAS_INTENSIDAD, seriesTecnica } from '../../utils/tecnicaIntensidad';
+import { TECNICAS_INTENSIDAD, TECNICAS_ORDEN, esTecnicaIntensidad, seriesTecnica } from '../../utils/tecnicaIntensidad';
 
 /** Filas de series complejas: tantas como las planificadas o las ya guardadas (la mayor). */
 const construirComplejas = (guardadas: SerieEjecutada[], cantidadPlan: number): SerieEjecutada[] => {
@@ -123,6 +124,8 @@ export const EjercicioCard = ({
   const [maxRepsPanelAbierto, setMaxRepsPanelAbierto] = useState(false);
   const [maxRepsCargando, setMaxRepsCargando] = useState(false);
   const [pesoConsultaRecord, setPesoConsultaRecord] = useState<number>(0);
+  /** Técnica elegida en el día cuando la rutina no la trae planificada. */
+  const [tecnicaElegida, setTecnicaElegida] = useState<TecnicaIntensidad | undefined>(undefined);
 
   const [ultimaSesionExtra, setUltimaSesionExtra] = useState<UltimaSesionEjercicio | null | undefined>(undefined);
   const ultimaSesionExtraFetchIdRef = useRef<string | null>(null);
@@ -150,7 +153,8 @@ export const EjercicioCard = ({
     [seriesEjecutadas]
   );
   const tecnica = ejercicio.tecnicaIntensidad;
-  const tecnicaInfo = tecnica ? TECNICAS_INTENSIDAD[tecnica] : null;
+  const tecnicaActiva = tecnica ?? tecnicaElegida;
+  const tecnicaInfo = tecnicaActiva ? TECNICAS_INTENSIDAD[tecnicaActiva] : null;
   const cantidadComplejasPlan = seriesTecnica(ejercicio);
   const prefijoCompleja = tecnicaInfo?.prefijo ?? 'E';
 
@@ -406,6 +410,7 @@ export const EjercicioCard = ({
           }))
     );
     setComplejas(construirComplejas(complejasProp, cantidadComplejasPlan));
+    setTecnicaElegida(undefined);
     setHasChanges(false);
     setMaquinaId(maquinaIdInicial);
     setAgarre(esAgarre(agarreInicial) ? agarreInicial : undefined);
@@ -572,17 +577,23 @@ export const EjercicioCard = ({
     [userInteracted, isEditMode, isSaved, seriesEjecutadas]
   );
 
-  const handleAddCompleja = () => {
+  const handleAddCompleja = (tecnicaNueva?: TecnicaIntensidad) => {
+    if (!tecnica && esTecnicaIntensidad(tecnicaNueva)) setTecnicaElegida(tecnicaNueva);
     setComplejas((prev) => [
       ...prev,
       { numeroSerie: prev.length + 1, pesoReal: undefined, repeticiones: undefined, esCompleja: true },
     ]);
+    setUserInteracted(true);
     setHasChanges(true);
     setIsSaved(false);
   };
 
   const handleRemoveUltimaCompleja = () => {
-    setComplejas((prev) => prev.slice(0, -1));
+    setComplejas((prev) => {
+      const siguientes = prev.slice(0, -1);
+      if (siguientes.length === 0 && !tecnica) setTecnicaElegida(undefined);
+      return siguientes;
+    });
     setHasChanges(true);
     setIsSaved(false);
   };
@@ -724,7 +735,7 @@ export const EjercicioCard = ({
             {ejercicioBilbo && esBilboDelDia && (
               <span className="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded">Método Bilbo</span>
             )}
-            {tecnicaInfo && (
+            {tecnica && tecnicaInfo && (
               <span
                 className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-300 rounded"
                 title={tecnicaInfo.descripcion}
@@ -1006,17 +1017,53 @@ export const EjercicioCard = ({
           </svg>
           Agregar Serie
         </Button>
+        {!tecnica && complejas.length === 0 && (
+          <div className="flex flex-wrap gap-2">
+            {TECNICAS_ORDEN.map((opcion) => (
+              <Button
+                key={opcion}
+                variant="outline"
+                size="sm"
+                onClick={() => handleAddCompleja(opcion)}
+                disabled={bloqueado}
+                className="border-orange-500/40 text-orange-200"
+              >
+                + {TECNICAS_INTENSIDAD[opcion].label}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {(tecnicaInfo || complejas.length > 0) && (
+      {(tecnicaActiva || complejas.length > 0) && (
         <div className="mb-4 rounded-lg border border-orange-500/40 bg-orange-500/5 p-3 space-y-3">
           <div>
-            <p className="text-sm font-semibold text-orange-300">
-              {tecnicaInfo ? tecnicaInfo.label : 'Series extra'}
-              <span className="ml-2 text-xs font-normal text-orange-200/70">
-                No cuentan como series normales
-              </span>
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-orange-300">
+                {tecnicaInfo ? tecnicaInfo.label : 'Series extra'}
+                <span className="ml-2 text-xs font-normal text-orange-200/70">
+                  No cuentan como series normales
+                </span>
+              </p>
+              {!tecnica && (
+                <select
+                  value={tecnicaElegida ?? ''}
+                  disabled={bloqueado}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+                    setTecnicaElegida(esTecnicaIntensidad(valor) ? valor : undefined);
+                  }}
+                  className="rounded-md border border-orange-500/50 bg-orange-500/10 px-2 py-1 text-xs text-orange-200"
+                >
+                  <option value="">Tipo…</option>
+                  {TECNICAS_ORDEN.map((opcion) => (
+                    <option key={opcion} value={opcion}>
+                      {TECNICAS_INTENSIDAD[opcion].label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
             {tecnicaInfo && <p className="text-xs text-dark-text-muted">{tecnicaInfo.descripcion}</p>}
           </div>
           {complejas.map((s, idx) => (
@@ -1052,7 +1099,7 @@ export const EjercicioCard = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={handleAddCompleja}
+            onClick={() => handleAddCompleja()}
             disabled={loading || (isSaved && !hasChanges && !isEditMode)}
             fullWidth
           >
